@@ -1,0 +1,413 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f1115;
+  color: #d7dbe0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #0f1115;
+}
+
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 100vh;
+  background: #0f1115;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  border-right: 1px solid #20242d;
+  background: #11141a;
+  padding: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  background: #171b23;
+  color: #78a6ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.brand-name {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.brand-meta,
+.eyebrow,
+.section-label {
+  color: #7d8590;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.new-session,
+.send-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  background: #171b23;
+  color: #d7dbe0;
+}
+
+.new-session {
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+}
+
+.new-session:hover,
+.send-button:hover,
+.icon-button:hover,
+.session-item:hover {
+  background: #1b2230;
+}
+
+.server-card {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid #20242d;
+  border-bottom: 1px solid #20242d;
+  padding: 12px 0;
+}
+
+.mono-text {
+  overflow: hidden;
+  color: #aab2bf;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+}
+
+.session-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #d7dbe0;
+  padding: 8px;
+  text-align: left;
+}
+
+.session-item.active {
+  border-color: #2f5ea8;
+  background: #162137;
+}
+
+.session-item span,
+.session-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item small {
+  color: #7d8590;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  font-size: 10px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #20242d;
+  background: #101319;
+  padding: 0 14px;
+}
+
+.session-title {
+  min-width: 0;
+  overflow: hidden;
+  color: #d7dbe0;
+  font-size: 14px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.select-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #7d8590;
+  font-size: 11px;
+}
+
+.select-label select {
+  max-width: 240px;
+  height: 28px;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  background: #151922;
+  color: #d7dbe0;
+  padding: 0 8px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  border: 1px solid #2b3240;
+  border-radius: 999px;
+  color: #8fb4ff;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.status-pill span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.conversation {
+  min-height: 0;
+  overflow: auto;
+  padding: 22px min(7vw, 72px);
+}
+
+.empty-state {
+  display: grid;
+  min-height: 42vh;
+  place-content: center;
+  gap: 6px;
+  color: #d7dbe0;
+  text-align: center;
+}
+
+.empty-state div {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.empty-state span {
+  color: #7d8590;
+  font-size: 13px;
+}
+
+.error-banner {
+  margin-bottom: 16px;
+  border: 1px solid #75333a;
+  border-radius: 6px;
+  background: #28171b;
+  color: #ffb4be;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.message-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 14px;
+  max-width: 980px;
+  margin: 0 auto 18px;
+}
+
+.message-role {
+  color: #7d8590;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.message-bubble {
+  min-width: 0;
+  border: 1px solid #20242d;
+  border-radius: 6px;
+  background: #121720;
+  padding: 12px 14px;
+  color: #d7dbe0;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.message-row.user .message-bubble {
+  background: #171d28;
+}
+
+.streaming-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 980px;
+  margin: 0 auto;
+  color: #8fb4ff;
+  font-size: 12px;
+}
+
+.streaming-line span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.composer {
+  border-top: 1px solid #20242d;
+  background: #101319;
+  padding: 10px min(7vw, 72px) 14px;
+}
+
+.composer-meta {
+  display: flex;
+  gap: 10px;
+  max-width: 980px;
+  margin: 0 auto 8px;
+  color: #7d8590;
+  font-size: 12px;
+}
+
+.composer-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 8px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 62px;
+  max-height: 180px;
+  resize: vertical;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  outline: none;
+  background: #151922;
+  color: #d7dbe0;
+  padding: 10px 12px;
+  line-height: 1.45;
+}
+
+.composer textarea:focus {
+  border-color: #4d8dff;
+  box-shadow: 0 0 0 1px #4d8dff33;
+}
+
+.send-button {
+  width: 36px;
+  height: 36px;
+  align-self: end;
+  background: #1a3562;
+  color: #dbe8ff;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 780px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .topbar {
+    align-items: stretch;
+    height: auto;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .topbar-controls {
+    flex-wrap: wrap;
+  }
+
+  .message-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
