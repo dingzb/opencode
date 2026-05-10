@@ -6,13 +6,18 @@ import { Conversation } from "./components/Conversation"
 import { Composer } from "./components/Composer"
 import { createClient, defaultServerUrl, formatError } from "./opencode/client"
 import {
+  applyPartDelta,
   flattenMessages,
+  hasAssistantResponse,
   makeTextPart,
+  mergeMessageViews,
   messageID,
   modelKey,
   modelOptions,
   selectDefaultAgent,
   selectDefaultModel,
+  upsertMessageInfo,
+  upsertMessagePart,
   type MessagePayload,
   type MessageView,
   type ModelSelection,
@@ -36,19 +41,33 @@ export function App() {
   const [selectedAgent, setSelectedAgent] = useState("")
   const [draft, setDraft] = useState("")
   const refreshTimer = useRef<number | undefined>(undefined)
+  const activeSessionIDRef = useRef("")
 
   const client = useMemo(() => createClient({ serverUrl, directory }), [serverUrl, directory])
   const models = useMemo(() => modelOptions(providers), [providers])
   const activeSession = sessions.find((session) => session.id === activeSessionID)
 
+  useEffect(() => {
+    activeSessionIDRef.current = activeSessionID
+  }, [activeSessionID])
+
   const refreshMessages = async (sessionID: string) => {
-    const response = await client.session.messages({ sessionID, limit: 80 })
-    setMessages(flattenMessages((response.data ?? []) as MessagePayload[]))
+    const response = await client.session.messages({ sessionID, directory, limit: 80 })
+    setMessages((current) => mergeMessageViews(current, flattenMessages((response.data ?? []) as MessagePayload[])))
+    return (response.data ?? []) as MessagePayload[]
   }
 
   const refreshSessions = async () => {
-    const response = await client.session.list({ limit: 50 })
+    const response = await client.session.list({ directory, limit: 50 })
     setSessions((response.data ?? []).filter((session) => !!session?.id))
+  }
+
+  const waitForAssistant = async (sessionID: string, userMessageID: string) => {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const next = await refreshMessages(sessionID)
+      if (hasAssistantResponse(next, userMessageID)) return
+      await new Promise((resolve) => window.setTimeout(resolve, 1000))
+    }
   }
 
   useEffect(() => {
@@ -62,7 +81,7 @@ export function App() {
         const [providerResponse, agentResponse, sessionResponse] = await Promise.all([
           client.provider.list(undefined, { signal: abort.signal }),
           client.app.agents(undefined, { signal: abort.signal }),
-          client.session.list({ limit: 50 }, { signal: abort.signal }),
+          client.session.list({ directory, limit: 50 }, { signal: abort.signal }),
         ])
         if (abort.signal.aborted) return
 
@@ -90,6 +109,7 @@ export function App() {
       return
     }
     const abort = new AbortController()
+    setMessages([])
     refreshMessages(activeSessionID).catch((err) => {
       if (abort.signal.aborted) return
       setError(formatError(err))
@@ -105,12 +125,27 @@ export function App() {
         const events = await client.global.event({ signal: abort.signal })
         for await (const event of events.stream) {
           if (abort.signal.aborted) return
-          if (!activeSessionID) continue
+          const currentSessionID = activeSessionIDRef.current
+          if (!currentSessionID) continue
           const payload = event.payload
-          if (payload.type !== "message.part.updated" && payload.type !== "message.updated") continue
+          if (payload.type === "message.part.delta") {
+            if (payload.properties.sessionID !== currentSessionID) continue
+            setMessages((current) => applyPartDelta(current, payload.properties))
+            continue
+          }
+          if (payload.type === "message.part.updated") {
+            if (payload.properties.part.sessionID !== currentSessionID) continue
+            setMessages((current) => upsertMessagePart(current, payload.properties.part))
+            continue
+          }
+          if (payload.type === "message.updated") {
+            if (payload.properties.sessionID !== currentSessionID) continue
+            setMessages((current) => upsertMessageInfo(current, payload.properties.info))
+            continue
+          }
           window.clearTimeout(refreshTimer.current)
           refreshTimer.current = window.setTimeout(() => {
-            refreshMessages(activeSessionID).catch((err) => setError(formatError(err)))
+            refreshMessages(currentSessionID).catch((err) => setError(formatError(err)))
           }, 80)
         }
       } catch (err) {
@@ -123,13 +158,14 @@ export function App() {
       abort.abort()
       window.clearTimeout(refreshTimer.current)
     }
-  }, [client, activeSessionID])
+  }, [client])
 
   const createSession = async () => {
     setStatus("connecting")
     setError("")
     try {
       const response = await client.session.create({
+        directory,
         agent: selectedAgent || undefined,
         model: selectedModel
           ? {
@@ -154,14 +190,27 @@ export function App() {
     const text = draft.trim()
     if (!text || !selectedModel || !selectedAgent) return
 
-    const sessionID = activeSessionID || (await client.session.create().then((response) => response.data?.id ?? ""))
+    const sessionID =
+      activeSessionID ||
+      (await client.session
+        .create({
+          directory,
+          agent: selectedAgent,
+          model: {
+            id: selectedModel.modelID,
+            providerID: selectedModel.providerID,
+          },
+        })
+        .then((response) => response.data?.id ?? ""))
     if (!sessionID) return
     if (!activeSessionID) {
+      activeSessionIDRef.current = sessionID
       setActiveSessionID(sessionID)
       await refreshSessions()
     }
 
     const id = messageID()
+    const part = makeTextPart(id, text)
     setDraft("")
     setStatus("streaming")
     setMessages((current) => [
@@ -170,6 +219,14 @@ export function App() {
         id,
         role: "user",
         text,
+        parts: [
+          {
+            ...part,
+            id: part.id ?? "",
+            sessionID,
+            messageID: id,
+          },
+        ],
         created: Date.now(),
       },
     ])
@@ -177,15 +234,16 @@ export function App() {
     try {
       await client.session.promptAsync({
         sessionID,
+        directory,
         agent: selectedAgent,
         model: {
           providerID: selectedModel.providerID,
           modelID: selectedModel.modelID,
         },
         messageID: id,
-        parts: [makeTextPart(id, text)],
+        parts: [part],
       })
-      await refreshMessages(sessionID)
+      await waitForAssistant(sessionID, id)
       await refreshSessions()
       setStatus("ready")
     } catch (err) {

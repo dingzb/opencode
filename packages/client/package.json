@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4456",
     "test": "bun test ./src",
+    "test:server": "bun test ./src/opencode/server.integration.ts",
     "typecheck": "node ./node_modules/@typescript/native-preview/bin/tsgo.js --noEmit"
   },
   "dependencies": {
