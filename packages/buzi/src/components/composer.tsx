@@ -159,10 +159,10 @@ export function Composer(props: ComposerProps) {
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 pl-7 pr-[calc(1.75rem+17px)] pb-5 pt-10">
-      <div className="pointer-events-auto mx-auto flex max-w-4xl flex-col gap-2 rounded-2xl bg-[#f0f0ee] p-2 shadow-lg shadow-zinc-950/10">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 px-[calc(1.75rem+var(--chat-scrollbar-width)-2px)] pb-5 pt-10">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-4xl flex-col gap-2 rounded-2xl border border-zinc-200/80 bg-[#fbfbfa] p-2 shadow-lg shadow-zinc-950/10">
         <textarea
-          className="max-h-40 min-h-12 resize-none bg-transparent px-3 py-2.5 text-sm leading-6 text-zinc-900 outline-none placeholder:text-zinc-400"
+          className="max-h-40 min-h-12 resize-none bg-transparent px-2 py-2.5 text-sm leading-6 text-zinc-900 outline-none placeholder:text-zinc-400"
           value={text}
           disabled={props.disabled}
           placeholder="Ask opencode..."
@@ -174,7 +174,7 @@ export function Composer(props: ComposerProps) {
             void submit()
           }}
         />
-        <div className="flex min-w-0 items-center justify-between gap-2 px-1 pb-1">
+        <div className="flex min-w-0 items-center justify-between gap-2 pb-1">
           <div className="flex min-w-0 items-center gap-1">
             <DropdownControl
               icon={<Cpu className="size-3.5 shrink-0" />}

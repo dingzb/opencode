@@ -45,7 +45,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto px-7 pb-40 pt-7"
+      className="chat-scrollbar flex-1 overflow-y-scroll px-7 pb-40 pt-7"
       onScroll={(event) => {
         const element = event.currentTarget
         stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
