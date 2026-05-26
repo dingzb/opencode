@@ -26,6 +26,7 @@ export const Entry = Schema.Struct({
   codeVerifier: Schema.mutableKey(Schema.optional(Schema.String)),
   oauthState: Schema.mutableKey(Schema.optional(Schema.String)),
   serverUrl: Schema.mutableKey(Schema.optional(Schema.String)),
+  authorized: Schema.mutableKey(Schema.optional(Schema.Boolean)),
 })
 export type Entry = Schema.Schema.Type<typeof Entry>
 
