@@ -30,7 +30,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
 
   if (props.messages.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center px-8 pb-36 text-center">
         <div className="mb-3 rounded-full border border-zinc-200 bg-white p-3 shadow-sm">
           <Bot className="size-5 text-zinc-500" />
         </div>
@@ -45,7 +45,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto px-7 py-7"
+      className="flex-1 overflow-y-auto px-7 pb-40 pt-7"
       onScroll={(event) => {
         const element = event.currentTarget
         stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
@@ -62,7 +62,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
           return (
             <div key={message.id} className={cn("flex min-w-0", user ? "justify-end" : "justify-start")}>
               {user ? (
-                <div className="max-w-[72%] rounded-2xl rounded-tr-md border border-zinc-200/80 bg-zinc-100/80 px-4 py-2.5 text-sm leading-6 text-zinc-800 shadow-sm">
+                <div className="max-w-[72%] rounded-2xl rounded-tr-md bg-[#ececea] px-4 py-2.5 text-sm leading-6 text-zinc-800">
                   {text || "Message sent"}
                 </div>
               ) : (
