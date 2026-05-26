@@ -15,6 +15,12 @@ export const Local = Schema.Struct({
   timeout: Schema.optional(PositiveInt).annotate({
     description: "Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.",
   }),
+  autoApprove: Schema.optional(Schema.Boolean).annotate({
+    description: "Enable proactive tool invocation. LLM may call tools without per-call confirmation. First call shows standard permission dialog; subsequent calls skip prompt within the session.",
+  }),
+  proactivePrompt: Schema.optional(Schema.String).annotate({
+    description: "Guidance for the LLM on when and how to proactively use this server's tools. Injected into the system prompt.",
+  }),
 }).annotate({ identifier: "McpLocalConfig" })
 export type Local = Schema.Schema.Type<typeof Local>
 
@@ -50,6 +56,12 @@ export const Remote = Schema.Struct({
   }),
   timeout: Schema.optional(PositiveInt).annotate({
     description: "Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.",
+  }),
+  autoApprove: Schema.optional(Schema.Boolean).annotate({
+    description: "Enable proactive tool invocation. LLM may call tools without per-call confirmation. First call shows standard permission dialog; subsequent calls skip prompt within the session.",
+  }),
+  proactivePrompt: Schema.optional(Schema.String).annotate({
+    description: "Guidance for the LLM on when and how to proactively use this server's tools. Injected into the system prompt.",
   }),
 }).annotate({ identifier: "McpRemoteConfig" })
 export type Remote = Schema.Schema.Type<typeof Remote>
