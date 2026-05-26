@@ -3,6 +3,8 @@ const prefixes = {
   part: "prt",
 } as const
 
+export const optimisticPartIDPrefix = "optimistic:"
+
 const length = 26
 let lastTimestamp = 0
 let counter = 0

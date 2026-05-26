@@ -1,5 +1,6 @@
 import type { ChatAction, ChatState } from "../types/chat"
 import type { Message, Part, Session } from "@opencode-ai/sdk/v2/client"
+import { optimisticPartIDPrefix } from "../lib/ids"
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
@@ -29,6 +30,17 @@ function updatePart(parts: Part[] | undefined, partID: string, field: string, de
 
 function sessionTime(session: Session) {
   return session.time.updated ?? session.time.created
+}
+
+function messageByID(state: ChatState, messageID: string) {
+  for (const messages of Object.values(state.messages)) {
+    const message = messages.find((item) => item.id === messageID)
+    if (message) return message
+  }
+}
+
+function removeOptimisticTextParts(parts: Part[] | undefined) {
+  return (parts ?? []).filter((part) => !(part.type === "text" && part.id.startsWith(optimisticPartIDPrefix)))
 }
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -83,14 +95,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         },
         parts: Object.fromEntries(Object.entries(state.parts).filter(([messageID]) => messageID !== action.messageID)),
       }
-    case "part.upsert":
+    case "part.upsert": {
+      const existing = state.parts[action.part.messageID] ?? []
+      const message = messageByID(state, action.part.messageID)
+      const parts = message?.role === "user" && action.part.type === "text" ? removeOptimisticTextParts(existing) : existing
+
       return {
         ...state,
         parts: {
           ...state.parts,
-          [action.part.messageID]: upsertByID(state.parts[action.part.messageID] ?? [], action.part),
+          [action.part.messageID]: upsertByID(parts, action.part),
         },
       }
+    }
     case "part.remove":
       return {
         ...state,

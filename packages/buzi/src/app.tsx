@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Bot, RotateCw } from "lucide-react"
 import { createOpencodeSdk } from "./lib/opencode"
-import { makeID } from "./lib/ids"
+import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
 import { SessionList } from "./components/session-list"
@@ -119,7 +119,7 @@ export function App() {
               agent: "build",
               model: { providerID: "default", modelID: "default" },
             },
-            parts: [{ id: makeID("part"), sessionID, messageID, type: "text", text }],
+            parts: [{ id: `${optimisticPartIDPrefix}${makeID("part")}`, sessionID, messageID, type: "text", text }],
           },
         ],
       })
