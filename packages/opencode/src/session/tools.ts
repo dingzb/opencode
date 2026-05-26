@@ -3,6 +3,7 @@ import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { MCP } from "@/mcp"
 import { Permission } from "@/permission"
+import { Config } from "@/config/config"
 import { Tool } from "@/tool/tool"
 import { ToolJsonSchema } from "@/tool/json-schema"
 import { ToolRegistry } from "@/tool/registry"
@@ -38,6 +39,20 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   const registry = yield* ToolRegistry.Service
   const mcp = yield* MCP.Service
   const truncate = yield* Truncate.Service
+  const config = yield* Config.Service
+
+  function sanitize(s: string) {
+    return s.replace(/[^a-zA-Z0-9_-]/g, "_")
+  }
+
+  const fullConfig = yield* config.get()
+  const mcpConfig = fullConfig.mcp ?? {}
+
+  const autoApproveServers = new Set<string>()
+  for (const [name, entry] of Object.entries(mcpConfig)) {
+    if (!entry || typeof entry !== "object") continue
+    if ("autoApprove" in entry && entry.autoApprove === true) autoApproveServers.add(sanitize(name))
+  }
 
   const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
     sessionID: input.session.id,
@@ -132,7 +147,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
             { args },
           )
           const result: Awaited<ReturnType<NonNullable<typeof execute>>> = yield* Effect.gen(function* () {
-            yield* ctx.ask({ permission: key, metadata: {}, patterns: ["*"], always: ["*"] })
+            const toolAutoApprove = [...autoApproveServers].some((prefix) => key.startsWith(prefix + "_"))
+            yield* ctx.ask({ permission: key, metadata: {}, patterns: ["*"], always: toolAutoApprove ? [] : ["*"] })
             return yield* Effect.promise(() => execute(args, opts))
           }).pipe(
             Effect.withSpan("Tool.execute", {
