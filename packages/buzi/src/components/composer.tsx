@@ -1,4 +1,4 @@
-import { ArrowUp, Bot, Check, ChevronDown, Cpu, Search } from "lucide-react"
+import { ArrowUp, Bot, Check, ChevronDown, Cpu, Search, Square } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import type { Agent, Model } from "@opencode-ai/sdk/v2/client"
@@ -15,6 +15,8 @@ type ModelOption = {
 
 type ComposerProps = {
   disabled?: boolean
+  working: boolean
+  stopping: boolean
   modelOptions: ModelOption[]
   selectedModel: string
   onModelChange: (value: string) => void
@@ -24,6 +26,7 @@ type ComposerProps = {
   onAgentChange: (value: string) => void
   agentLoading: boolean
   onSubmit: (text: string) => Promise<void>
+  onStop: () => Promise<void>
 }
 
 type DropdownOption = {
@@ -152,6 +155,11 @@ export function Composer(props: ComposerProps) {
   const [text, setText] = useState("")
 
   const submit = async () => {
+    if (props.stopping) return
+    if (props.working) {
+      await props.onStop()
+      return
+    }
     const value = text.trim()
     if (!value) return
     setText("")
@@ -171,6 +179,7 @@ export function Composer(props: ComposerProps) {
             if (event.key !== "Enter" || event.shiftKey) return
             event.preventDefault()
             if (event.repeat) return
+            if (props.working || props.stopping) return
             void submit()
           }}
         />
@@ -207,10 +216,15 @@ export function Composer(props: ComposerProps) {
           <Button
             type="button"
             className="size-8 rounded-full bg-zinc-900 px-0 text-white shadow-sm shadow-zinc-950/10 hover:bg-zinc-700 disabled:bg-zinc-300 disabled:text-zinc-500 disabled:shadow-none"
-            disabled={props.disabled || !text.trim()}
+            disabled={props.disabled || props.stopping || (!props.working && !text.trim())}
             onClick={submit}
+            title={props.working ? "Stop response" : "Send message"}
           >
-            <ArrowUp className="size-4 stroke-[2.4]" />
+            {props.working ? (
+              <Square className="size-3 fill-current stroke-[2.4]" />
+            ) : (
+              <ArrowUp className="size-4 stroke-[2.4]" />
+            )}
           </Button>
         </div>
       </div>

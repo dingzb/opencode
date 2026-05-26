@@ -12,6 +12,8 @@ function toAction(event: Event): ChatAction | undefined {
       return { type: "session.upsert", session: event.properties.info }
     case "session.deleted":
       return { type: "session.remove", sessionID: event.properties.info.id }
+    case "session.status":
+      return { type: "session.status", sessionID: event.properties.sessionID, status: event.properties.status }
     case "message.updated":
       return { type: "message.upsert", message: event.properties.info }
     case "message.removed":

@@ -62,8 +62,18 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         sessions: removeByID(state.sessions, action.sessionID),
+        sessionStatus: Object.fromEntries(
+          Object.entries(state.sessionStatus).filter(([sessionID]) => sessionID !== action.sessionID),
+        ),
         activeSessionID: state.activeSessionID === action.sessionID ? undefined : state.activeSessionID,
       }
+    case "session.status":
+      return {
+        ...state,
+        sessionStatus: { ...state.sessionStatus, [action.sessionID]: action.status },
+      }
+    case "session.status.loaded":
+      return { ...state, sessionStatus: action.statuses }
     case "messages.loaded": {
       const messages = action.items.map((item) => item.info).sort((a, b) => cmp(a.id, b.id))
       const parts = action.items.reduce<Record<string, Part[]>>((acc, item) => {

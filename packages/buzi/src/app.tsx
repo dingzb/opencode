@@ -31,8 +31,10 @@ export function App() {
   const [search, setSearch] = useState("")
   const [selectedModelValue, setSelectedModelValue] = useState("")
   const [selectedAgent, setSelectedAgent] = useState("")
+  const [stoppingSessionID, setStoppingSessionID] = useState<string>()
   const [state, dispatch] = useReducer(chatReducer, {
     sessions: [],
+    sessionStatus: {},
     messages: {},
     parts: {},
   })
@@ -80,6 +82,16 @@ export function App() {
       const items = result.data ?? []
       dispatch({ type: "messages.loaded", sessionID, items })
       return items
+    },
+  })
+
+  useQuery({
+    queryKey: ["session-status", directory],
+    enabled,
+    queryFn: async () => {
+      const result = await sdk.session.status()
+      dispatch({ type: "session.status.loaded", statuses: result.data ?? {} })
+      return result.data
     },
   })
 
@@ -165,6 +177,7 @@ export function App() {
     void queryClient.invalidateQueries({ queryKey: ["health"] })
     void queryClient.invalidateQueries({ queryKey: ["path"] })
     void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+    void queryClient.invalidateQueries({ queryKey: ["session-status"] })
     void queryClient.invalidateQueries({ queryKey: ["providers"] })
     void queryClient.invalidateQueries({ queryKey: ["agents"] })
     if (state.activeSessionID) void queryClient.invalidateQueries({ queryKey: ["messages"] })
@@ -191,6 +204,7 @@ export function App() {
       const agent = selectedAgent || "build"
 
       const messageID = makeID("message")
+      dispatch({ type: "session.status", sessionID, status: { type: "busy" } })
       dispatch({
         type: "messages.loaded",
         sessionID,
@@ -210,21 +224,40 @@ export function App() {
         ],
       })
 
-      await sdk.session.promptAsync({
-        sessionID,
-        messageID,
-        model,
-        agent,
-        parts: [{ type: "text", text }],
-      })
+      await sdk.session
+        .promptAsync({
+          sessionID,
+          messageID,
+          model,
+          agent,
+          parts: [{ type: "text", text }],
+        })
+        .catch((error) => {
+          dispatch({ type: "session.status", sessionID, status: { type: "idle" } })
+          throw error
+        })
     },
     [enabled, sdk, selectedAgent, selectedModel, state.activeSessionID, state.messages, state.parts],
   )
+
+  const stop = useCallback(async () => {
+    const sessionID = state.activeSessionID
+    if (!sessionID) return
+    setStoppingSessionID(sessionID)
+    await sdk.session
+      .abort({ sessionID })
+      .catch(() => {})
+      .finally(() => {
+        dispatch({ type: "session.status", sessionID, status: { type: "idle" } })
+        setStoppingSessionID(undefined)
+      })
+  }, [sdk, state.activeSessionID])
 
   const activeMessages = state.activeSessionID ? (state.messages[state.activeSessionID] ?? []) : []
   const activeSession =
     state.sessions.find((session) => session.id === state.activeSessionID) ??
     (state.activeSessionID ? undefined : state.sessions[0])
+  const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
   const connected = health.data?.healthy === true && status === "connected"
   const connectionText =
     health.isError || path.isError
@@ -288,6 +321,8 @@ export function App() {
           />
           <Composer
             disabled={!enabled || health.isError}
+            working={activeSessionStatus?.type === "busy"}
+            stopping={stoppingSessionID === state.activeSessionID}
             modelOptions={modelOptions}
             selectedModel={selectedModelValue}
             onModelChange={setSelectedModelValue}
@@ -297,6 +332,7 @@ export function App() {
             onAgentChange={setSelectedAgent}
             agentLoading={agents.isLoading}
             onSubmit={submit}
+            onStop={stop}
           />
         </section>
       </main>
