@@ -147,7 +147,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
             { args },
           )
           const result: Awaited<ReturnType<NonNullable<typeof execute>>> = yield* Effect.gen(function* () {
-            const toolAutoApprove = [...autoApproveServers].some((prefix) => key.startsWith(prefix + "_"))
+            const toolAutoApprove = [...autoApproveServers].sort((a, b) => b.length - a.length).some((prefix) => key.startsWith(prefix + "_"))
             yield* ctx.ask({ permission: key, metadata: {}, patterns: ["*"], always: toolAutoApprove ? [] : ["*"] })
             return yield* Effect.promise(() => execute(args, opts))
           }).pipe(
