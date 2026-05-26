@@ -98,6 +98,41 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionPrompt") {}
 
+export function generateMcpProactiveHint(mcpConfig: Record<string, unknown>): string | undefined {
+  const entries = Object.entries(mcpConfig).filter(([_name, entry]) => {
+    if (!entry || typeof entry !== "object") return false
+    return (entry as Record<string, unknown>).autoApprove === true
+  })
+  if (entries.length === 0) return undefined
+
+  const lines = [
+    "## Proactive MCP Tools",
+    "",
+    "The following MCP servers are configured for proactive use. You",
+    "may call their tools BEFORE answering the user — even when the",
+    "user hasn't explicitly asked for these servers.",
+    "",
+  ]
+
+  for (const [name, entry] of entries) {
+    const e = entry as Record<string, unknown>
+    if (typeof e.proactivePrompt === "string" && (e.proactivePrompt as string).trim()) {
+      lines.push(`### ${name}`)
+      lines.push(e.proactivePrompt as string)
+    } else {
+      lines.push(`- **${name}**: Tools in this server are available for proactive invocation.`)
+    }
+    lines.push("")
+  }
+
+  lines.push(
+    "Use these tools proactively when a user's question may involve the",
+    "information or capabilities these tools expose.",
+  )
+
+  return lines.join("\n")
+}
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -1440,6 +1475,9 @@ export const layer = Layer.effect(
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
             const system = [...env, ...instructions, ...(skills ? [skills] : [])]
+            const cfg = yield* config.get()
+            const mcpHint = generateMcpProactiveHint(cfg.mcp ?? {})
+            if (mcpHint) system.push(mcpHint)
             const format = lastUser.format ?? { type: "text" as const }
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
             const result = yield* handle.process({
