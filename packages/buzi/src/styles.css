@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@source "../node_modules/streamdown/dist/*.js";
+@source "../node_modules/@streamdown/code/dist/*.js";
+@source "../node_modules/@streamdown/cjk/dist/*.js";
 
 :root {
   color-scheme: light;
@@ -63,6 +66,12 @@ input {
   margin: 0.65rem 0;
 }
 
+.markdown a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .markdown ul,
 .markdown ol {
   margin: 0.65rem 0;
@@ -97,9 +106,188 @@ input {
   color: inherit;
 }
 
+.markdown [data-streamdown="code-block"] {
+  gap: 0.25rem;
+  margin: 0.85rem 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  padding: 0;
+}
+
+.markdown [data-streamdown="code-block-header"] {
+  height: 1.6rem;
+  padding: 0 0.125rem;
+  color: #a1a1aa;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.markdown [data-streamdown="code-block-header"] span {
+  margin-left: 0;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.markdown [data-streamdown="code-block-actions"] {
+  border: 0;
+  background: rgb(244 244 245 / 86%);
+  padding: 0.125rem 0.25rem;
+  box-shadow: none;
+}
+
+.markdown [data-streamdown="code-block-actions"] button {
+  padding: 0.125rem;
+}
+
+.markdown [data-streamdown="code-block-actions"] svg {
+  width: 12px;
+  height: 12px;
+}
+
+.markdown [data-streamdown="code-block-body"] {
+  border: 0;
+  border-radius: 0.5rem;
+  background: #f1f1ef;
+  padding: 0.85rem;
+  color: #3f3f46;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.markdown [data-streamdown="code-block-body"] pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown [data-streamdown="code-block-body"] code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown [data-streamdown="code-block-body"] code > span::before {
+  color: rgb(113 113 122 / 45%);
+}
+
 .markdown blockquote {
   margin: 0.75rem 0;
   border-left: 3px solid #d4d4d8;
   padding-left: 0.8rem;
   color: #52525b;
+}
+
+.markdown table {
+  margin: 0.8rem 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid #e4e4e7;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+
+.markdown th {
+  background: #f4f4f5;
+  color: #18181b;
+  font-weight: 600;
+}
+
+.markdown [data-streamdown="table-wrapper"] {
+  gap: 0.25rem;
+  margin: 0.85rem 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  padding: 0;
+}
+
+.markdown [data-streamdown="table-wrapper"] > div:first-child {
+  min-height: 1.6rem;
+  align-items: center;
+}
+
+.markdown [data-streamdown="table-wrapper"] > div:first-child button {
+  padding: 0.125rem;
+}
+
+.markdown [data-streamdown="table-wrapper"] > div:first-child svg {
+  width: 12px;
+  height: 12px;
+}
+
+.markdown [data-streamdown="table-wrapper"] > div:last-child {
+  border: 0;
+  border-radius: 0.5rem;
+  background: #f1f1ef;
+}
+
+.markdown [data-streamdown="table"] {
+  margin: 0;
+  border: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: transparent;
+  color: #3f3f46;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.markdown [data-streamdown="table-header"] {
+  background: rgb(244 244 245 / 72%);
+}
+
+.markdown [data-streamdown="table-header-cell"],
+.markdown [data-streamdown="table-cell"] {
+  border: 0;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown [data-streamdown="table-header-cell"] {
+  color: #52525b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.markdown [data-streamdown="table-row"] + [data-streamdown="table-row"] [data-streamdown="table-cell"],
+.markdown [data-streamdown="table-body"] [data-streamdown="table-row"]:first-child [data-streamdown="table-cell"] {
+  border-top: 1px solid rgb(212 212 216 / 52%);
+}
+
+.markdown [data-streamdown="table-cell"] {
+  color: #3f3f46;
+}
+
+.process-markdown {
+  color: rgb(82 82 91 / 78%);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.process-markdown .markdown {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.process-markdown [data-streamdown="code-block-body"] {
+  overflow-x: hidden;
+}
+
+.process-markdown [data-streamdown="code-block-body"] pre,
+.process-markdown [data-streamdown="code-block-body"] code,
+.process-markdown [data-streamdown="code-block-body"] code > span {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }

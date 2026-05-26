@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, FileText, Hammer, Sparkles } from "lucide-re
 import { useLayoutEffect, useRef, useState } from "react"
 import type { Part } from "@opencode-ai/sdk/v2/client"
 import { cn } from "../lib/utils"
+import { Markdown } from "./markdown"
 
 function partLabel(part: Part) {
   if (part.type === "reasoning") return "Thinking"
@@ -35,7 +36,7 @@ function Icon(props: { type: Part["type"] }) {
 
 export function ProcessPart(props: { part: Part }) {
   const [open, setOpen] = useState(true)
-  const bodyRef = useRef<HTMLPreElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
   const body = partBody(props.part)
 
@@ -47,36 +48,39 @@ export function ProcessPart(props: { part: Part }) {
   }, [body, open])
 
   return (
-    <div className="my-2 rounded-lg border border-zinc-200 bg-zinc-50/80">
-      <button className="flex w-full items-center gap-2 px-3 py-2 text-left" onClick={() => setOpen(!open)}>
-        {open ? <ChevronDown className="size-4 text-zinc-500" /> : <ChevronRight className="size-4 text-zinc-500" />}
-        <span className="text-zinc-500">
+    <div className="my-2">
+      <button
+        className="flex w-full items-center gap-2 rounded-md px-0 py-1.5 text-left text-zinc-500 hover:text-zinc-700"
+        onClick={() => setOpen(!open)}
+      >
+        {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        <span className="text-zinc-400">
           <Icon type={props.part.type} />
         </span>
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{props.part.type}</span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800">{partLabel(props.part)}</span>
+        <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">{props.part.type}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-zinc-600">{partLabel(props.part)}</span>
         <span
           className={cn(
-            "size-2 rounded-full",
+            "size-1.5 rounded-full",
             props.part.type === "tool" && props.part.state.status === "error"
-              ? "bg-red-500"
+              ? "bg-red-400"
               : props.part.type === "tool" && props.part.state.status !== "completed"
-                ? "bg-amber-500"
-                : "bg-emerald-500",
+                ? "bg-amber-400"
+                : "bg-emerald-400",
           )}
         />
       </button>
       {open && body ? (
-        <pre
+        <div
           ref={bodyRef}
-          className="max-h-64 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words border-t border-zinc-200 p-3 text-xs leading-5 text-zinc-700 [overflow-wrap:anywhere]"
+          className="process-markdown max-h-64 overflow-y-auto overflow-x-hidden rounded-r-lg border-l-[3px] border-zinc-300/70 bg-zinc-100/45 px-3 py-2.5 [overflow-wrap:anywhere]"
           onScroll={(event) => {
             const element = event.currentTarget
             stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
           }}
         >
-          {body}
-        </pre>
+          <Markdown text={body} />
+        </div>
       ) : null}
     </div>
   )

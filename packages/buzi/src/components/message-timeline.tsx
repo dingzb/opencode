@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react"
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
-import { Bot, UserRound } from "lucide-react"
+import { Bot } from "lucide-react"
 import { Markdown } from "./markdown"
 import { ProcessPart } from "./process-part"
 import { cn } from "../lib/utils"
@@ -51,39 +51,32 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
         stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
       }}
     >
-      <div className="mx-auto flex max-w-4xl flex-col gap-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-7">
         {props.messages.map((message) => {
           const parts = props.parts[message.id] ?? []
           const text = textParts(parts).join("\n\n")
           const processes = processParts(parts)
           const user = message.role === "user"
+          const streaming = !user && typeof message.time.completed !== "number"
 
           return (
-            <div key={message.id} className={cn("flex gap-3.5", user && "justify-end")}>
-              {!user ? (
-                <div className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm">
-                  <Bot className="size-4 text-zinc-600" />
-                </div>
-              ) : null}
-              <div className={cn("min-w-0", user ? "max-w-[70%]" : "flex-1")}>
-                {user ? (
-                  <div className="rounded-2xl rounded-tr-md bg-zinc-950 px-4 py-2.5 text-sm leading-6 text-white shadow-sm">
-                    {text || "Message sent"}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-zinc-200/90 bg-white px-4 py-3.5 shadow-sm">
-                    {processes.map((part) => (
-                      <ProcessPart key={part.id} part={part} />
-                    ))}
-                    {text ? <Markdown text={text} /> : <div className="text-sm text-zinc-500">Waiting for output...</div>}
-                  </div>
-                )}
-              </div>
+            <div key={message.id} className={cn("flex min-w-0", user ? "justify-end" : "justify-start")}>
               {user ? (
-                <div className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-950 shadow-sm">
-                  <UserRound className="size-4 text-white" />
+                <div className="max-w-[72%] rounded-2xl rounded-tr-md border border-zinc-200/80 bg-zinc-100/80 px-4 py-2.5 text-sm leading-6 text-zinc-800 shadow-sm">
+                  {text || "Message sent"}
                 </div>
-              ) : null}
+              ) : (
+                <div className="min-w-0 flex-1">
+                  {processes.map((part) => (
+                    <ProcessPart key={part.id} part={part} />
+                  ))}
+                  {text ? (
+                    <Markdown text={text} streaming={streaming} />
+                  ) : (
+                    <div className="text-sm text-zinc-500">Waiting for output...</div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}

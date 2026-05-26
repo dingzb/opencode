@@ -1,12 +1,25 @@
-import { marked } from "marked"
-import { useMemo } from "react"
+import { cjk } from "@streamdown/cjk"
+import { code } from "@streamdown/code"
+import { Streamdown, type CodeHighlighterPlugin } from "streamdown"
 
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-})
+const streamdownCode = code as unknown as CodeHighlighterPlugin
 
-export function Markdown(props: { text: string }) {
-  const html = useMemo(() => marked.parse(props.text || ""), [props.text])
-  return <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />
+export function Markdown(props: { text: string; streaming?: boolean }) {
+  return (
+    <Streamdown
+      animated={props.streaming === true}
+      className="markdown"
+      controls={{
+        code: { copy: true, download: false },
+        table: { copy: true, download: true, fullscreen: true },
+      }}
+      isAnimating={props.streaming === true}
+      linkSafety={{ enabled: true }}
+      mode={props.streaming === true ? "streaming" : "static"}
+      plugins={{ cjk, code: streamdownCode }}
+      skipHtml
+    >
+      {props.text || ""}
+    </Streamdown>
+  )
 }
