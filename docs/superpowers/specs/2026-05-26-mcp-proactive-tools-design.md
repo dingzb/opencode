@@ -39,22 +39,45 @@ const system = [...env, ...instructions, ...(skills ? [skills] : []), ...(mcps ?
 
 ### What
 
-Dynamically generated per-session, including only MCP servers with `autoApprove: true`:
+Dynamically generated per-session, generic pattern driven by MCP server config.
+Only MCP servers with `autoApprove: true` are included. Tool names and descriptions
+come directly from the MCP server's `listTools()` output. An optional `prompt`
+config field per server can provide additional usage guidance.
 
 ```
 ## Proactive MCP Tools
 
-The following MCP tools are available for proactive use. When a user asks
-about topics that may be covered by these tools, call them BEFORE answering
-— even if the user doesn't explicitly mention the knowledge base.
+The following MCP tools are available for proactive use. You may call these
+tools BEFORE answering the user — even when the user hasn't explicitly asked
+for them.
 
+{for each auto-approved server:}
 ### {server_name}
-- {server_name}_{tool1}: {description}
-- {server_name}_{tool2}: {description}
+- {sanitized_server}_{tool1}: {description from MCP server}
+- {sanitized_server}_{tool2}: {description from MCP server}
+{optional prompt from config if provided}
 
-Typical workflow: first use list_directory to discover relevant documents,
-then search_fragment to find specific content.
+Use these tools proactively when a user's question may involve the information
+or capabilities these tools expose. Prefer exploring first (list/discover tools)
+before drilling into specifics.
 ```
+
+**Dynamic attributes**:
+- `{server_name}` — the config key, not sanitized (readable for LLM)
+- `{sanitized_server}_{tool_name}` — the actual callable tool key (LLM must use this exact key)
+- `{description}` — from MCP server's tool definition, unmodified
+- `{optional prompt}` — additional guidance from `proactivePrompt` config field, e.g. "Use for internal documentation lookup, standards, and coding conventions."
+
+**Config schema** — `proactivePrompt` field (optional, per-server):
+
+```ts
+proactivePrompt: Schema.optional(Schema.String).annotate({
+  description: "Additional guidance injected into the system prompt to help the LLM decide when to proactively call this server's tools."
+})
+```
+
+Note: The `mcps()` method must have access to MCP tool definitions at prompt assembly time.
+Since tool defs are cached in `s.defs[clientName]`, the method queries the MCP service state.
 
 ---
 
@@ -70,25 +93,54 @@ yield* ctx.ask({ permission: key, metadata: {}, patterns: ["*"], always: ["*"] }
 
 ### New behavior
 
+The permission prompt UI remains **identical** to the existing MCP tool authorization
+dialog. The difference is in the authorization persistence strategy:
+
 ```
-LLM calls MCP tool
-  → Server has autoApprove config?  ──No──→ existing always: [*] prompt
+LLM calls MCP tool (key = "{server}_{tool}")
+  → Server has autoApprove config? ──No──→ always: ["*"] — prompt every call (existing behavior)
   → Yes
-  → Authorized in mcp-auth.json?  ──Yes──→ silent execution
+  → Authorized in mcp-auth.json? ──Yes──→ skip prompt, execute silently
   → No
-  → One-time prompt: "Allow auto-query for {server}?"
-  → User agrees → persist to mcp-auth.json → silent execution
-  → User denies → fall through to existing prompt
+  → Show permission prompt (same UI as existing MCP tools)
+    → User confirms (with "always allow" if they choose)
+    → Persist authorized=true to mcp-auth.json
+    → Subsequent calls: skip prompt
+  → User denies
+    → Tool call fails with permission error, LLM handles the error
 ```
+
+The authorization prompt wording matches existing MCP tool prompts — it asks
+for permission to invoke the specific tool, not a separate "auto-query" prompt.
+The "always allow" mechanism in the existing permission UI serves as the natural
+first-time authorization trigger.
 
 ### Config schema changes
 
-`src/config/mcp.ts` — add `autoApprove` to both `Local` and `Remote` schemas:
+`src/config/mcp.ts` — add two new optional fields to both `Local` and `Remote` schemas:
 
 ```ts
 autoApprove: Schema.optional(Schema.Boolean).annotate({
-  description: "Allow LLM to proactively call tools without per-call confirmation. User authorizes once."
+  description: "Enable proactive tool invocation. First call prompts for authorization via the standard MCP permission dialog; subsequent calls skip the prompt. Authorization is persisted per-server in mcp-auth.json."
 })
+proactivePrompt: Schema.optional(Schema.String).annotate({
+  description: "Additional guidance for the LLM on when and how to proactively use this server's tools. Injected into the system prompt alongside the tool listing."
+})
+```
+
+Example config:
+
+```json
+{
+  "mcp": {
+    "knowledge-base": {
+      "type": "local",
+      "command": ["node", "kb-server.js"],
+      "autoApprove": true,
+      "proactivePrompt": "Use for internal documentation, coding standards, and project conventions."
+    }
+  }
+}
 ```
 
 ### Auth storage
