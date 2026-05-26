@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@opencode-ai/buzi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 4455",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "1.15.10",
+    "@tanstack/react-query": "5.99.2",
+    "@tailwindcss/vite": "4.1.11",
+    "clsx": "2.1.1",
+    "lucide-react": "0.468.0",
+    "marked": "17.0.1",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
+    "tailwind-merge": "3.3.1",
+    "tailwindcss": "4.1.11",
+    "vite": "7.1.4"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.4",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.0.4",
+    "typescript": "5.8.2"
+  }
+}
