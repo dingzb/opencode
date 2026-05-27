@@ -150,13 +150,13 @@ export function SessionsPanel(props: {
                 </button>
               </div>
               {!isCollapsed ? (
-                <div className="mt-1 space-y-1 pl-5">
+                <div className="mt-1 space-y-1">
                   {visibleSessions.map((session) => (
                     <button
                       key={session.id}
                       title={`Last activity: ${subtitle(session)}`}
                       className={cn(
-                        "flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left transition-colors",
+                        "flex h-8 w-full items-center gap-2 rounded-md pl-7 pr-2.5 text-left transition-colors",
                         props.activeSessionID === session.id
                           ? "bg-white"
                           : "hover:bg-white/70",
@@ -174,11 +174,11 @@ export function SessionsPanel(props: {
                     </button>
                   ))}
                   {!props.loading && group.sessions.length === 0 ? (
-                    <div className="px-2.5 py-2 text-xs text-zinc-500">No sessions</div>
+                    <div className="px-2.5 py-2 pl-7 text-xs text-zinc-500">No sessions</div>
                   ) : null}
                   {hasHiddenSessions ? (
                     <button
-                      className="flex h-7 w-full items-center rounded-md px-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
+                      className="flex h-7 w-full items-center rounded-md pl-7 pr-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
                       onClick={() => toggleSessionExpansion(key)}
                     >
                       {sessionsExpanded ? "折叠显示" : `展开显示 ${group.sessions.length - defaultVisibleSessionCount} 个`}
