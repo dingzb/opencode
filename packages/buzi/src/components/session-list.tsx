@@ -3,6 +3,8 @@ import { useMemo, useState } from "react"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { cn } from "../lib/utils"
 
+const defaultVisibleSessionCount = 5
+
 function title(session: Session) {
   return session.title || session.slug || session.id
 }
@@ -77,6 +79,7 @@ export function SessionsPanel(props: {
 }) {
   const groups = useMemo(() => projectGroups(props.sessions, props.directory), [props.directory, props.sessions])
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
+  const [expandedSessions, setExpandedSessions] = useState<Set<string>>(() => new Set())
 
   function groupKey(group: ProjectGroup) {
     return group.id
@@ -84,6 +87,15 @@ export function SessionsPanel(props: {
 
   function toggleGroup(key: string) {
     setCollapsed((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function toggleSessionExpansion(key: string) {
+    setExpandedSessions((current) => {
       const next = new Set(current)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -103,11 +115,16 @@ export function SessionsPanel(props: {
           New Project
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="sidebar-scrollbar min-h-0 flex-1 overflow-y-auto px-1 py-2">
         {props.loading ? <div className="px-3 py-4 text-sm text-zinc-500">Loading sessions...</div> : null}
         {groups.map((group) => {
           const key = groupKey(group)
           const isCollapsed = collapsed.has(key)
+          const sessionsExpanded = expandedSessions.has(key)
+          const visibleSessions = sessionsExpanded
+            ? group.sessions
+            : group.sessions.slice(0, defaultVisibleSessionCount)
+          const hasHiddenSessions = group.sessions.length > defaultVisibleSessionCount
           return (
             <div key={key} className="mb-2">
               <div className="group flex h-8 items-center gap-1 rounded-md px-1 text-zinc-700 hover:bg-white/70">
@@ -132,7 +149,7 @@ export function SessionsPanel(props: {
               </div>
               {!isCollapsed ? (
                 <div className="mt-1 space-y-1 pl-5">
-                  {group.sessions.map((session) => (
+                  {visibleSessions.map((session) => (
                     <button
                       key={session.id}
                       title={`Last activity: ${subtitle(session)}`}
@@ -152,6 +169,14 @@ export function SessionsPanel(props: {
                   ))}
                   {!props.loading && group.sessions.length === 0 ? (
                     <div className="px-2.5 py-2 text-xs text-zinc-500">No sessions</div>
+                  ) : null}
+                  {hasHiddenSessions ? (
+                    <button
+                      className="flex h-7 w-full items-center rounded-md px-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
+                      onClick={() => toggleSessionExpansion(key)}
+                    >
+                      {sessionsExpanded ? "折叠显示" : `展开显示 ${group.sessions.length - defaultVisibleSessionCount} 个`}
+                    </button>
                   ) : null}
                 </div>
               ) : null}

@@ -310,34 +310,48 @@ input {
   overflow-wrap: anywhere;
 }
 
-.chat-scrollbar {
+.chat-scrollbar,
+.sidebar-scrollbar {
   scrollbar-color: transparent transparent;
   scrollbar-gutter: stable both-edges;
 }
 
-.chat-scrollbar:hover {
+.chat-scrollbar:hover,
+.sidebar-scrollbar:hover {
   scrollbar-color: rgb(161 161 170 / 0.7) transparent;
 }
 
-.chat-scrollbar::-webkit-scrollbar {
+.chat-scrollbar::-webkit-scrollbar,
+.sidebar-scrollbar::-webkit-scrollbar {
   width: var(--chat-scrollbar-width);
 }
 
-.chat-scrollbar::-webkit-scrollbar-track {
+.chat-scrollbar::-webkit-scrollbar-button,
+.sidebar-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track,
+.sidebar-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.chat-scrollbar::-webkit-scrollbar-thumb {
+.chat-scrollbar::-webkit-scrollbar-thumb,
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
   border: 6px solid transparent;
   border-radius: 999px;
   background: transparent;
   background-clip: content-box;
 }
 
-.chat-scrollbar:hover::-webkit-scrollbar-thumb {
+.chat-scrollbar:hover::-webkit-scrollbar-thumb,
+.sidebar-scrollbar:hover::-webkit-scrollbar-thumb {
   background-color: rgb(161 161 170 / 0.65);
 }
 
-.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+.chat-scrollbar::-webkit-scrollbar-thumb:hover,
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgb(113 113 122 / 0.78);
 }
