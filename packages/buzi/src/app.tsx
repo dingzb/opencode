@@ -11,6 +11,9 @@ import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
 
 const serverUrl = "http://localhost:4096"
+const selectedModelStoragePrefix = "buzi:model-selection:"
+const selectedVariantStoragePrefix = "buzi:model-variant:"
+const selectedVariantDefaultValue = "__default__"
 
 type ModelOption = {
   value: string
@@ -24,12 +27,50 @@ function modelValue(providerID: string, modelID: string) {
   return JSON.stringify({ providerID, modelID })
 }
 
+function selectedModelStorageKey(directory: string, sessionID?: string) {
+  return `${selectedModelStoragePrefix}${directory}:${sessionID ?? "draft"}`
+}
+
+function selectedVariantStorageKey(directory: string, sessionID?: string) {
+  return `${selectedVariantStoragePrefix}${directory}:${sessionID ?? "draft"}`
+}
+
+function readSelectedModel(directory: string | undefined, sessionID?: string) {
+  if (!directory) return undefined
+  return window.localStorage.getItem(selectedModelStorageKey(directory, sessionID)) || undefined
+}
+
+function writeSelectedModel(directory: string | undefined, value: string, sessionID?: string) {
+  if (!directory || !value) return
+  window.localStorage.setItem(selectedModelStorageKey(directory, sessionID), value)
+}
+
+function readSelectedVariant(directory: string | undefined, sessionID?: string) {
+  if (!directory) return undefined
+  const value = window.localStorage.getItem(selectedVariantStorageKey(directory, sessionID))
+  if (value === null) return undefined
+  if (value === selectedVariantDefaultValue) return null
+  return value
+}
+
+function writeSelectedVariant(directory: string | undefined, value: string | null | undefined, sessionID?: string) {
+  if (!directory) return
+  const key = selectedVariantStorageKey(directory, sessionID)
+  if (value === undefined) {
+    window.localStorage.removeItem(key)
+    return
+  }
+  window.localStorage.setItem(key, value ?? selectedVariantDefaultValue)
+}
+
 export function App() {
   const queryClient = useQueryClient()
   const [directory, setDirectory] = useState<string>()
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
   const [search, setSearch] = useState("")
   const [selectedModelValue, setSelectedModelValue] = useState("")
+  const [selectedVariant, setSelectedVariant] = useState<string | null | undefined>()
+  const [restoredModelSessions, setRestoredModelSessions] = useState<Set<string>>(() => new Set())
   const [selectedAgent, setSelectedAgent] = useState("")
   const [stoppingSessionID, setStoppingSessionID] = useState<string>()
   const [state, dispatch] = useReducer(chatReducer, {
@@ -138,6 +179,20 @@ export function App() {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [agents.data])
 
+  const activeMessages = state.activeSessionID ? (state.messages[state.activeSessionID] ?? []) : []
+
+  const sessionModelSelection = useMemo(() => {
+    for (let index = activeMessages.length - 1; index >= 0; index--) {
+      const message = activeMessages[index]
+      if (message.role === "user") {
+        return {
+          model: modelValue(message.model.providerID, message.model.modelID),
+          variant: message.model.variant,
+        }
+      }
+    }
+  }, [activeMessages])
+
   useOpencodeEvents({
     sdk: globalSdk,
     directory: directory ?? "",
@@ -150,20 +205,71 @@ export function App() {
     if (!directory) return
     dispatch({ type: "session.active", sessionID: undefined })
     setSelectedModelValue("")
+    setSelectedVariant(undefined)
     setSelectedAgent("")
+    setRestoredModelSessions(new Set())
   }, [directory])
 
   useEffect(() => {
     if (modelOptions.length === 0) return
-    if (modelOptions.some((option) => option.value === selectedModelValue)) return
+    const availableModel = (value: string | undefined) =>
+      value && modelOptions.some((option) => option.value === value) ? value : undefined
+    const availableVariant = (model: string | undefined, value: string | null | undefined) => {
+      if (!model || !value) return undefined
+      const option = modelOptions.find((item) => item.value === model)
+      return option?.model.variants && value in option.model.variants ? value : undefined
+    }
+    const availableVariantOverride = (model: string | undefined, value: string | null | undefined) => {
+      if (value === undefined) return undefined
+      if (value === null) return null
+      return availableVariant(model, value)
+    }
 
+    const sessionID = state.activeSessionID
+    const storedSessionModel = readSelectedModel(directory, sessionID)
+    const storedSessionVariant = readSelectedVariant(directory, sessionID)
+    const storedDraftModel = readSelectedModel(directory)
+    const storedDraftVariant = readSelectedVariant(directory)
     const defaults = providers.data?.default ?? {}
     const defaultModel =
       modelOptions.find((option) => defaults[option.providerID] === option.modelID) ??
       modelOptions.find((option) => option.model.status === "active") ??
       modelOptions[0]
-    setSelectedModelValue(defaultModel.value)
-  }, [modelOptions, providers.data?.default, selectedModelValue])
+
+    const restoredSessionModel = availableModel(sessionModelSelection?.model)
+    if (sessionID && !storedSessionModel && !restoredModelSessions.has(sessionID) && restoredSessionModel) {
+      const restoredVariant = sessionModelSelection?.variant
+        ? availableVariant(restoredSessionModel, sessionModelSelection.variant)
+        : null
+      writeSelectedModel(directory, restoredSessionModel, sessionID)
+      writeSelectedVariant(directory, restoredVariant, sessionID)
+      setRestoredModelSessions((current) => new Set(current).add(sessionID))
+      if (restoredSessionModel !== selectedModelValue) setSelectedModelValue(restoredSessionModel)
+      if (restoredVariant !== selectedVariant) setSelectedVariant(restoredVariant)
+      return
+    }
+
+    const nextModelValue =
+      availableModel(storedSessionModel) ??
+      availableModel(storedDraftModel) ??
+      defaultModel.value
+    const nextVariant =
+      (storedSessionVariant !== undefined
+        ? availableVariantOverride(nextModelValue, storedSessionVariant)
+        : availableVariantOverride(nextModelValue, storedDraftVariant))
+
+    if (nextModelValue !== selectedModelValue) setSelectedModelValue(nextModelValue)
+    if (nextVariant !== selectedVariant) setSelectedVariant(nextVariant)
+  }, [
+    directory,
+    modelOptions,
+    providers.data?.default,
+    restoredModelSessions,
+    selectedModelValue,
+    selectedVariant,
+    sessionModelSelection,
+    state.activeSessionID,
+  ])
 
   useEffect(() => {
     if (primaryAgents.length === 0) return
@@ -184,6 +290,48 @@ export function App() {
   }, [queryClient, state.activeSessionID])
 
   const selectedModel = modelOptions.find((option) => option.value === selectedModelValue)
+  const selectedAgentConfig = primaryAgents.find((agent) => agent.name === selectedAgent)
+  const variantOptions = useMemo(() => ["default", ...Object.keys(selectedModel?.model.variants ?? {})], [selectedModel])
+  const configuredVariant = useMemo(() => {
+    if (!selectedModel || !selectedAgentConfig?.variant || !selectedAgentConfig.model) return undefined
+    if (selectedAgentConfig.model.providerID !== selectedModel.providerID) return undefined
+    if (selectedAgentConfig.model.modelID !== selectedModel.modelID) return undefined
+    if (!selectedModel.model.variants?.[selectedAgentConfig.variant]) return undefined
+    return selectedAgentConfig.variant
+  }, [selectedAgentConfig, selectedModel])
+  const currentVariant =
+    selectedVariant === null
+      ? undefined
+      : selectedVariant && variantOptions.includes(selectedVariant)
+        ? selectedVariant
+        : configuredVariant
+
+  const handleModelChange = useCallback(
+    (value: string) => {
+      setSelectedModelValue(value)
+      writeSelectedModel(directory, value, state.activeSessionID)
+      const option = modelOptions.find((item) => item.value === value)
+      if (selectedVariant && !option?.model.variants?.[selectedVariant]) {
+        setSelectedVariant(undefined)
+        writeSelectedVariant(directory, undefined, state.activeSessionID)
+      }
+    },
+    [directory, modelOptions, selectedVariant, state.activeSessionID],
+  )
+
+  const handleVariantChange = useCallback(
+    (value: string | null | undefined) => {
+      setSelectedVariant(value)
+      writeSelectedVariant(directory, value, state.activeSessionID)
+    },
+    [directory, state.activeSessionID],
+  )
+
+  const handleSessionSelect = useCallback((sessionID: string) => {
+    dispatch({ type: "session.active", sessionID })
+    setSelectedModelValue("")
+    setSelectedVariant(undefined)
+  }, [])
 
   const createSession = useCallback(async () => {
     if (!enabled) return
@@ -200,6 +348,8 @@ export function App() {
       const sessionID = state.activeSessionID ?? (await sdk.session.create({ title: text.slice(0, 64) })).data?.id
       if (!sessionID) return
       dispatch({ type: "session.active", sessionID })
+      writeSelectedModel(directory, selectedModelValue, sessionID)
+      writeSelectedVariant(directory, selectedVariant, sessionID)
       const model = selectedModel ? { providerID: selectedModel.providerID, modelID: selectedModel.modelID } : undefined
       const agent = selectedAgent || "build"
 
@@ -217,7 +367,7 @@ export function App() {
               role: "user",
               time: { created: Date.now() },
               agent,
-              model: model ?? { providerID: "default", modelID: "default" },
+              model: { ...(model ?? { providerID: "default", modelID: "default" }), variant: currentVariant },
             },
             parts: [{ id: `${optimisticPartIDPrefix}${makeID("part")}`, sessionID, messageID, type: "text", text }],
           },
@@ -230,6 +380,7 @@ export function App() {
           messageID,
           model,
           agent,
+          variant: currentVariant,
           parts: [{ type: "text", text }],
         })
         .catch((error) => {
@@ -237,7 +388,19 @@ export function App() {
           throw error
         })
     },
-    [enabled, sdk, selectedAgent, selectedModel, state.activeSessionID, state.messages, state.parts],
+    [
+      directory,
+      enabled,
+      sdk,
+      selectedAgent,
+      selectedModel,
+      selectedModelValue,
+      selectedVariant,
+      currentVariant,
+      state.activeSessionID,
+      state.messages,
+      state.parts,
+    ],
   )
 
   const stop = useCallback(async () => {
@@ -253,7 +416,6 @@ export function App() {
       })
   }, [sdk, state.activeSessionID])
 
-  const activeMessages = state.activeSessionID ? (state.messages[state.activeSessionID] ?? []) : []
   const activeSession =
     state.sessions.find((session) => session.id === state.activeSessionID) ??
     (state.activeSessionID ? undefined : state.sessions[0])
@@ -276,7 +438,7 @@ export function App() {
           activeSessionID={state.activeSessionID}
           search={search}
           setSearch={setSearch}
-          onSelect={(sessionID) => dispatch({ type: "session.active", sessionID })}
+          onSelect={handleSessionSelect}
           onNew={createSession}
           loading={sessions.isLoading}
         />
@@ -325,7 +487,10 @@ export function App() {
             stopping={stoppingSessionID === state.activeSessionID}
             modelOptions={modelOptions}
             selectedModel={selectedModelValue}
-            onModelChange={setSelectedModelValue}
+            onModelChange={handleModelChange}
+            variantOptions={variantOptions}
+            selectedVariant={currentVariant}
+            onVariantChange={handleVariantChange}
             modelLoading={providers.isLoading}
             agents={primaryAgents}
             selectedAgent={selectedAgent}
