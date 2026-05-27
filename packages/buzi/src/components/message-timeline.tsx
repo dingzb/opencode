@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef } from "react"
+import { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react"
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
 import { Bot } from "lucide-react"
 import { Markdown } from "./markdown"
@@ -41,17 +41,50 @@ const MessageItem = memo(function MessageItem(props: { message: Message; parts: 
 
 export function MessageTimeline(props: { messages: Message[]; parts: Record<string, Part[]>; loading: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
+  const scrollFrameRef = useRef<number | undefined>(undefined)
+  const userScrollAtRef = useRef(0)
 
-  useLayoutEffect(() => {
-    if (!stickToBottomRef.current) return
-    const frame = window.requestAnimationFrame(() => {
+  const isAtBottom = useCallback((element: HTMLDivElement) => {
+    return element.scrollHeight - element.scrollTop - element.clientHeight < 24
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current)
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = undefined
       const element = scrollRef.current
       if (!element || !stickToBottomRef.current) return
       element.scrollTop = element.scrollHeight
     })
-    return () => window.cancelAnimationFrame(frame)
-  }, [props.messages, props.parts])
+  }, [])
+
+  const markUserScroll = useCallback(() => {
+    userScrollAtRef.current = Date.now()
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!stickToBottomRef.current) return
+    scrollToBottom()
+  }, [props.messages, props.parts, scrollToBottom])
+
+  useLayoutEffect(() => {
+    const content = contentRef.current
+    if (!content) return
+
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollToBottom()
+    })
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [scrollToBottom])
+
+  useLayoutEffect(() => {
+    return () => {
+      if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current)
+    }
+  }, [])
 
   if (props.loading) {
     return <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">Loading conversations...</div>
@@ -75,12 +108,20 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
     <div
       ref={scrollRef}
       className="chat-scrollbar flex-1 overflow-y-scroll px-7 pb-40 pt-7"
+      onKeyDown={markUserScroll}
+      onPointerDown={markUserScroll}
       onScroll={(event) => {
         const element = event.currentTarget
-        stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
+        if (isAtBottom(element)) {
+          stickToBottomRef.current = true
+          return
+        }
+        if (Date.now() - userScrollAtRef.current < 500) stickToBottomRef.current = false
       }}
+      onTouchStart={markUserScroll}
+      onWheel={markUserScroll}
     >
-      <div className="mx-auto flex max-w-4xl flex-col gap-7">
+      <div ref={contentRef} className="mx-auto flex max-w-4xl flex-col gap-7">
         {props.messages.map((message) => {
           return <MessageItem key={message.id} message={message} parts={props.parts[message.id] ?? emptyParts} />
         })}
