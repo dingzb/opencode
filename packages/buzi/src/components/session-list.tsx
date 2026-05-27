@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FolderPlus, MessageSquarePlus, Plus } from "lucide-react"
+import { Folder, FolderOpen, FolderPlus, LoaderCircle, MessageSquarePlus, Plus } from "lucide-react"
 import { useMemo, useState } from "react"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { cn } from "../lib/utils"
@@ -71,6 +71,8 @@ export function SessionsPanel(props: {
   sessions: Session[]
   directory?: string
   activeSessionID?: string
+  titleForSession?: (session: Session) => string
+  isSessionBusy?: (sessionID: string) => boolean
   onSelect: (sessionID: string) => void
   onNewProject: () => void
   onNewSession: (projectID?: string) => void
@@ -133,9 +135,9 @@ export function SessionsPanel(props: {
                   onClick={() => toggleGroup(key)}
                 >
                   {isCollapsed ? (
-                    <ChevronRight className="size-3.5 shrink-0 text-zinc-500" />
+                    <Folder className="size-3.5 shrink-0 text-zinc-500" />
                   ) : (
-                    <ChevronDown className="size-3.5 shrink-0 text-zinc-500" />
+                    <FolderOpen className="size-3.5 shrink-0 text-zinc-500" />
                   )}
                   <span className="truncate text-xs font-semibold">{group.name}</span>
                 </button>
@@ -156,15 +158,19 @@ export function SessionsPanel(props: {
                       className={cn(
                         "flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left transition-colors",
                         props.activeSessionID === session.id
-                          ? "bg-white shadow-sm ring-1 ring-zinc-200"
+                          ? "bg-white"
                           : "hover:bg-white/70",
                       )}
                       onClick={() => props.onSelect(session.id)}
                     >
                       <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-900">
-                        {title(session)}
+                        {props.titleForSession?.(session) ?? title(session)}
                       </span>
-                      <span className="shrink-0 text-[11px] text-zinc-500">{relativeTime(sessionTime(session))}</span>
+                      {props.isSessionBusy?.(session.id) ? (
+                        <LoaderCircle className="size-3.5 shrink-0 animate-spin text-zinc-500" />
+                      ) : (
+                        <span className="shrink-0 text-[11px] text-zinc-500">{relativeTime(sessionTime(session))}</span>
+                      )}
                     </button>
                   ))}
                   {!props.loading && group.sessions.length === 0 ? (

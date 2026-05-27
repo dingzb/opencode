@@ -28,6 +28,12 @@ function modelValue(providerID: string, modelID: string) {
   return JSON.stringify({ providerID, modelID })
 }
 
+function temporaryTitle(text: string) {
+  const title = text.replace(/\s+/g, " ").trim()
+  if (title.length <= 64) return title
+  return `${title.slice(0, 61)}...`
+}
+
 function selectedModelStorageKey(directory: string, sessionID?: string) {
   return `${selectedModelStoragePrefix}${directory}:${sessionID ?? "draft"}`
 }
@@ -79,6 +85,7 @@ export function App() {
   const [state, dispatch] = useReducer(chatReducer, {
     sessions: [],
     sessionStatus: {},
+    temporaryTitles: {},
     messages: {},
     parts: {},
   })
@@ -228,7 +235,7 @@ export function App() {
       return availableVariant(model, value)
     }
 
-    const sessionID = state.activeSessionID
+    const sessionID = state.activeSessionID ?? undefined
     const storedSessionModel = readSelectedModel(directory, sessionID)
     const storedSessionVariant = readSelectedVariant(directory, sessionID)
     const storedDraftModel = readSelectedModel(directory)
@@ -312,11 +319,11 @@ export function App() {
   const handleModelChange = useCallback(
     (value: string) => {
       setSelectedModelValue(value)
-      writeSelectedModel(directory, value, state.activeSessionID)
+      writeSelectedModel(directory, value, state.activeSessionID ?? undefined)
       const option = modelOptions.find((item) => item.value === value)
       if (selectedVariant && !option?.model.variants?.[selectedVariant]) {
         setSelectedVariant(undefined)
-        writeSelectedVariant(directory, undefined, state.activeSessionID)
+        writeSelectedVariant(directory, undefined, state.activeSessionID ?? undefined)
       }
     },
     [directory, modelOptions, selectedVariant, state.activeSessionID],
@@ -325,7 +332,7 @@ export function App() {
   const handleVariantChange = useCallback(
     (value: string | null | undefined) => {
       setSelectedVariant(value)
-      writeSelectedVariant(directory, value, state.activeSessionID)
+      writeSelectedVariant(directory, value, state.activeSessionID ?? undefined)
     },
     [directory, state.activeSessionID],
   )
@@ -354,12 +361,10 @@ export function App() {
 
   const createSession = useCallback(async () => {
     if (!enabled) return
-    const result = await sdk.session.create({ title: "New session" })
-    if (!result.data) return
-    dispatch({ type: "session.upsert", session: result.data })
-    dispatch({ type: "session.active", sessionID: result.data.id })
-    refresh()
-  }, [enabled, refresh, sdk])
+    dispatch({ type: "session.active", sessionID: null })
+    setSelectedModelValue("")
+    setSelectedVariant(undefined)
+  }, [enabled])
 
   const deleteActiveSession = useCallback(async () => {
     const sessionID = state.activeSessionID
@@ -379,8 +384,11 @@ export function App() {
   const submit = useCallback(
     async (text: string) => {
       if (!enabled) return
-      const sessionID = state.activeSessionID ?? (await sdk.session.create({ title: text.slice(0, 64) })).data?.id
+      const newSession = state.activeSessionID ? undefined : await sdk.session.create()
+      const sessionID = state.activeSessionID ?? newSession?.data?.id
       if (!sessionID) return
+      if (newSession?.data) dispatch({ type: "session.upsert", session: newSession.data })
+      if (newSession?.data) dispatch({ type: "session.temporaryTitle", sessionID, title: temporaryTitle(text) })
       dispatch({ type: "session.active", sessionID })
       writeSelectedModel(directory, selectedModelValue, sessionID)
       writeSelectedVariant(directory, selectedVariant, sessionID)
@@ -450,9 +458,17 @@ export function App() {
       })
   }, [sdk, state.activeSessionID])
 
-  const activeSession =
-    state.sessions.find((session) => session.id === state.activeSessionID) ??
-    (state.activeSessionID ? undefined : state.sessions[0])
+  const activeSession = state.activeSessionID
+    ? state.sessions.find((session) => session.id === state.activeSessionID)
+    : undefined
+  const sessionTitle = useCallback(
+    (session: { id: string; title?: string; slug?: string }) =>
+      state.temporaryTitles[session.id] ?? session.title ?? session.slug ?? "New session",
+    [state.temporaryTitles],
+  )
+  const isSessionBusy = useCallback((sessionID: string) => state.sessionStatus[sessionID]?.type === "busy", [
+    state.sessionStatus,
+  ])
   const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
   const connected = health.data?.healthy === true && status === "connected"
   const connectionText =
@@ -476,7 +492,9 @@ export function App() {
           <SessionsPanel
             sessions={state.sessions}
             directory={directory}
-            activeSessionID={state.activeSessionID}
+            activeSessionID={state.activeSessionID ?? undefined}
+            titleForSession={sessionTitle}
+            isSessionBusy={isSessionBusy}
             onSelect={handleSessionSelect}
             onNewProject={openProject}
             onNewSession={createSession}
@@ -487,7 +505,7 @@ export function App() {
           <header className="flex h-11 items-center justify-between border-b border-zinc-200/80 bg-[#fbfbfa] px-4">
             <div className="min-w-0">
               <div className="truncate text-[14px] font-semibold text-zinc-950">
-                {activeSession?.title ?? activeSession?.slug ?? "opencode"}
+                {activeSession ? sessionTitle(activeSession) : "New session"}
               </div>
             </div>
             <div className="relative">

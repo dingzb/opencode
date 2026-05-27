@@ -19,6 +19,10 @@ function removeByID<T extends { id: string }>(items: T[] | undefined, id: string
   return (items ?? []).filter((item) => item.id !== id)
 }
 
+function removeKey<T>(items: Record<string, T>, key: string) {
+  return Object.fromEntries(Object.entries(items).filter(([id]) => id !== key))
+}
+
 function updatePart(parts: Part[] | undefined, partID: string, field: string, delta: string) {
   return (parts ?? []).map((part) => {
     if (part.id !== partID) return part
@@ -30,6 +34,21 @@ function updatePart(parts: Part[] | undefined, partID: string, field: string, de
 
 function sessionTime(session: Session) {
   return session.time.updated ?? session.time.created
+}
+
+function newestSession(a: Session, b: Session) {
+  return sessionTime(a) > sessionTime(b) ? a : b
+}
+
+function mergeLoadedSessions(current: Session[], loaded: Session[]) {
+  const loadedIDs = new Set(loaded.map((item) => item.id))
+  return [
+    ...loaded.map((item) => {
+      const existing = current.find((session) => session.id === item.id)
+      return existing ? newestSession(existing, item) : item
+    }),
+    ...current.filter((item) => !loadedIDs.has(item.id)),
+  ]
 }
 
 function messageByID(state: ChatState, messageID: string) {
@@ -48,20 +67,32 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "sessions.loaded":
       return {
         ...state,
-        sessions: action.sessions.slice().sort((a, b) => sessionTime(b) - sessionTime(a)),
-        activeSessionID: state.activeSessionID ?? action.sessions[0]?.id,
+        sessions: mergeLoadedSessions(state.sessions, action.sessions).sort((a, b) => sessionTime(b) - sessionTime(a)),
+        activeSessionID: state.activeSessionID === undefined ? action.sessions[0]?.id : state.activeSessionID,
       }
     case "session.active":
       return { ...state, activeSessionID: action.sessionID }
     case "session.upsert":
+      const existing = state.sessions.find((session) => session.id === action.session.id)
+      const clearTemporaryTitle =
+        action.source === "updated" && existing !== undefined && existing.title !== action.session.title
       return {
         ...state,
         sessions: upsertByID(state.sessions, action.session).sort((a, b) => sessionTime(b) - sessionTime(a)),
+        temporaryTitles: clearTemporaryTitle
+          ? removeKey(state.temporaryTitles, action.session.id)
+          : state.temporaryTitles,
+      }
+    case "session.temporaryTitle":
+      return {
+        ...state,
+        temporaryTitles: { ...state.temporaryTitles, [action.sessionID]: action.title },
       }
     case "session.remove":
       return {
         ...state,
         sessions: removeByID(state.sessions, action.sessionID),
+        temporaryTitles: removeKey(state.temporaryTitles, action.sessionID),
         sessionStatus: Object.fromEntries(
           Object.entries(state.sessionStatus).filter(([sessionID]) => sessionID !== action.sessionID),
         ),

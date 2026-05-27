@@ -9,8 +9,9 @@ type DeltaAction = Extract<ChatAction, { type: "part.delta" }>
 function toAction(event: Event): ChatAction | undefined {
   switch (event.type) {
     case "session.created":
+      return { type: "session.upsert", session: event.properties.info, source: "created" }
     case "session.updated":
-      return { type: "session.upsert", session: event.properties.info }
+      return { type: "session.upsert", session: event.properties.info, source: "updated" }
     case "session.deleted":
       return { type: "session.remove", sessionID: event.properties.info.id }
     case "session.status":

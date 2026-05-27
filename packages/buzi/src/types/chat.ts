@@ -8,15 +8,17 @@ export type MessagePageItem = {
 export type ChatState = {
   sessions: Session[]
   sessionStatus: Record<string, SessionStatus>
+  temporaryTitles: Record<string, string>
   messages: Record<string, Message[]>
   parts: Record<string, Part[]>
-  activeSessionID?: string
+  activeSessionID?: string | null
 }
 
 export type ChatAction =
   | { type: "sessions.loaded"; sessions: Session[] }
-  | { type: "session.active"; sessionID?: string }
-  | { type: "session.upsert"; session: Session }
+  | { type: "session.active"; sessionID?: string | null }
+  | { type: "session.upsert"; session: Session; source?: "created" | "updated" | "local" }
+  | { type: "session.temporaryTitle"; sessionID: string; title: string }
   | { type: "session.remove"; sessionID: string }
   | { type: "session.status"; sessionID: string; status: SessionStatus }
   | { type: "session.status.loaded"; statuses: Record<string, SessionStatus> }
