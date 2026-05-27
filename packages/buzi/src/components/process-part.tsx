@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, FileText, Hammer, Sparkles } from "lucide-react"
-import { useLayoutEffect, useRef, useState } from "react"
+import { memo, useLayoutEffect, useRef, useState } from "react"
 import type { Part } from "@opencode-ai/sdk/v2/client"
 import { cn } from "../lib/utils"
 import { Markdown } from "./markdown"
@@ -28,23 +28,33 @@ function partBody(part: Part) {
   return ""
 }
 
+function partStreaming(part: Part) {
+  if (part.type === "reasoning") return typeof part.time.end !== "number"
+  if (part.type === "tool") return part.state.status === "pending" || part.state.status === "running"
+  return false
+}
+
 function Icon(props: { type: Part["type"] }) {
   if (props.type === "reasoning") return <Sparkles className="size-4" />
   if (props.type === "tool" || props.type === "patch") return <Hammer className="size-4" />
   return <FileText className="size-4" />
 }
 
-export function ProcessPart(props: { part: Part }) {
+export const ProcessPart = memo(function ProcessPart(props: { part: Part }) {
   const [open, setOpen] = useState(true)
   const bodyRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
   const body = partBody(props.part)
+  const streaming = partStreaming(props.part)
 
   useLayoutEffect(() => {
     if (!open || !stickToBottomRef.current) return
-    const element = bodyRef.current
-    if (!element) return
-    element.scrollTop = element.scrollHeight
+    const frame = window.requestAnimationFrame(() => {
+      const element = bodyRef.current
+      if (!element || !stickToBottomRef.current) return
+      element.scrollTop = element.scrollHeight
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [body, open])
 
   return (
@@ -79,9 +89,9 @@ export function ProcessPart(props: { part: Part }) {
             stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
           }}
         >
-          <Markdown text={body} />
+          <Markdown text={body} streaming={streaming} />
         </div>
       ) : null}
     </div>
   )
-}
+})

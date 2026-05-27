@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react"
+import { memo, useLayoutEffect, useMemo, useRef } from "react"
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
 import { Bot } from "lucide-react"
 import { Markdown } from "./markdown"
@@ -13,15 +13,44 @@ function processParts(parts: Part[]) {
   return parts.filter((part) => part.type !== "text" && part.type !== "step-start" && part.type !== "step-finish")
 }
 
+const emptyParts: Part[] = []
+
+const MessageItem = memo(function MessageItem(props: { message: Message; parts: Part[] }) {
+  const text = useMemo(() => textParts(props.parts).join("\n\n"), [props.parts])
+  const processes = useMemo(() => processParts(props.parts), [props.parts])
+  const user = props.message.role === "user"
+  const streaming = !user && (!("completed" in props.message.time) || typeof props.message.time.completed !== "number")
+
+  return (
+    <div className={cn("flex min-w-0", user ? "justify-end" : "justify-start")}>
+      {user ? (
+        <div className="max-w-[72%] rounded-2xl rounded-tr-md bg-[#ececea] px-4 py-2.5 text-sm leading-6 text-zinc-800">
+          {text || "Message sent"}
+        </div>
+      ) : (
+        <div className="min-w-0 flex-1">
+          {processes.map((part) => (
+            <ProcessPart key={part.id} part={part} />
+          ))}
+          {text ? <Markdown text={text} streaming={streaming} /> : <div className="text-sm text-zinc-500">Waiting for output...</div>}
+        </div>
+      )}
+    </div>
+  )
+})
+
 export function MessageTimeline(props: { messages: Message[]; parts: Record<string, Part[]>; loading: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
 
   useLayoutEffect(() => {
     if (!stickToBottomRef.current) return
-    const element = scrollRef.current
-    if (!element) return
-    element.scrollTop = element.scrollHeight
+    const frame = window.requestAnimationFrame(() => {
+      const element = scrollRef.current
+      if (!element || !stickToBottomRef.current) return
+      element.scrollTop = element.scrollHeight
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [props.messages, props.parts])
 
   if (props.loading) {
@@ -53,32 +82,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
     >
       <div className="mx-auto flex max-w-4xl flex-col gap-7">
         {props.messages.map((message) => {
-          const parts = props.parts[message.id] ?? []
-          const text = textParts(parts).join("\n\n")
-          const processes = processParts(parts)
-          const user = message.role === "user"
-          const streaming = !user && typeof message.time.completed !== "number"
-
-          return (
-            <div key={message.id} className={cn("flex min-w-0", user ? "justify-end" : "justify-start")}>
-              {user ? (
-                <div className="max-w-[72%] rounded-2xl rounded-tr-md bg-[#ececea] px-4 py-2.5 text-sm leading-6 text-zinc-800">
-                  {text || "Message sent"}
-                </div>
-              ) : (
-                <div className="min-w-0 flex-1">
-                  {processes.map((part) => (
-                    <ProcessPart key={part.id} part={part} />
-                  ))}
-                  {text ? (
-                    <Markdown text={text} streaming={streaming} />
-                  ) : (
-                    <div className="text-sm text-zinc-500">Waiting for output...</div>
-                  )}
-                </div>
-              )}
-            </div>
-          )
+          return <MessageItem key={message.id} message={message} parts={props.parts[message.id] ?? emptyParts} />
         })}
       </div>
     </div>

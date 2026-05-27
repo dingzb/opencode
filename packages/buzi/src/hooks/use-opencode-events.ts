@@ -4,6 +4,7 @@ import type { OpencodeSdk } from "../lib/opencode"
 import type { Event } from "@opencode-ai/sdk/v2/client"
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+type DeltaAction = Extract<ChatAction, { type: "part.delta" }>
 
 function toAction(event: Event): ChatAction | undefined {
   switch (event.type) {
@@ -44,6 +45,36 @@ export function useOpencodeEvents(input: {
     if (!input.enabled) return
 
     const controller = new AbortController()
+    const pendingDeltas = new Map<string, DeltaAction>()
+    let flushFrame: number | undefined
+
+    const flushDeltas = () => {
+      if (flushFrame !== undefined) {
+        window.cancelAnimationFrame(flushFrame)
+        flushFrame = undefined
+      }
+      if (pendingDeltas.size === 0) return
+      const actions = Array.from(pendingDeltas.values())
+      pendingDeltas.clear()
+      for (const action of actions) input.dispatch(action)
+    }
+
+    const scheduleDelta = (action: DeltaAction) => {
+      const key = `${action.messageID}:${action.partID}:${action.field}`
+      const existing = pendingDeltas.get(key)
+      pendingDeltas.set(key, existing ? { ...existing, delta: `${existing.delta}${action.delta}` } : action)
+      if (flushFrame !== undefined) return
+      flushFrame = window.requestAnimationFrame(flushDeltas)
+    }
+
+    const dispatchAction = (action: ChatAction) => {
+      if (action.type === "part.delta") {
+        scheduleDelta(action)
+        return
+      }
+      flushDeltas()
+      input.dispatch(action)
+    }
 
     const run = async () => {
       while (!controller.signal.aborted) {
@@ -62,7 +93,7 @@ export function useOpencodeEvents(input: {
             if ((event.directory ?? "global") !== input.directory) continue
             const payload = event.payload as Event
             const action = toAction(payload)
-            if (action) input.dispatch(action)
+            if (action) dispatchAction(action)
           }
         } catch (error) {
           if (!controller.signal.aborted) console.error("[opencode:event]", error)
@@ -76,6 +107,7 @@ export function useOpencodeEvents(input: {
 
     return () => {
       controller.abort()
+      flushDeltas()
       input.onStatus("disconnected")
     }
   }, [input.sdk, input.directory, input.dispatch, input.enabled, input.onStatus])
