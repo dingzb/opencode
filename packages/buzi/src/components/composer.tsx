@@ -63,8 +63,6 @@ function DropdownControl(props: {
   const searchRef = useRef<HTMLInputElement>(null)
   const selected = props.options.find((option) => option.value === props.value)
   const selectedTitle = selected ? [selected.label, selected.meta].filter(Boolean).join(" - ") : props.placeholder
-  const textStyle = { fontSize: 11 }
-  const metaStyle = { fontSize: 10 }
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const visibleOptions = normalizedQuery
     ? props.options.filter((option) =>
@@ -100,16 +98,15 @@ function DropdownControl(props: {
       <button
         type="button"
         className={cn(
-          "flex h-8 min-w-0 max-w-56 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-50",
+          "composer-control flex h-8 min-w-0 max-w-56 items-center gap-1.5 rounded-lg px-2 font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-50",
           open && "bg-zinc-100 text-zinc-800",
         )}
-        style={textStyle}
         disabled={props.disabled}
         onClick={() => setOpen((value) => !value)}
         title={selectedTitle}
       >
         {props.icon}
-        <span className="min-w-0 truncate text-[11px] leading-none">{selected?.label ?? props.placeholder}</span>
+        <span className="min-w-0 truncate leading-none">{selected?.label ?? props.placeholder}</span>
         <ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
@@ -120,8 +117,7 @@ function DropdownControl(props: {
               <Search className="size-3.5 shrink-0" />
               <input
                 ref={searchRef}
-                className="min-w-0 flex-1 bg-transparent text-[11px] text-zinc-800 outline-none placeholder:text-zinc-400"
-                style={textStyle}
+                className="composer-control min-w-0 flex-1 bg-transparent text-zinc-800 outline-none placeholder:text-zinc-400"
                 value={query}
                 placeholder="Search models..."
                 onChange={(event) => setQuery(event.target.value)}
@@ -142,10 +138,9 @@ function DropdownControl(props: {
                     key={option.value}
                     type="button"
                     className={cn(
-                      "flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] text-zinc-700 hover:bg-zinc-100",
+                      "composer-control flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-zinc-700 hover:bg-zinc-100",
                       active && "bg-zinc-100 text-zinc-950",
                     )}
-                    style={textStyle}
                     onClick={() => {
                       props.onChange(option.value)
                       setOpen(false)
@@ -153,11 +148,11 @@ function DropdownControl(props: {
                     title={[option.label, option.meta].filter(Boolean).join(" - ")}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate" style={textStyle}>
+                      <span className="block truncate">
                         {option.label}
                       </span>
                       {option.meta ? (
-                        <span className="block truncate text-[10px] text-zinc-400" style={metaStyle}>
+                        <span className="composer-option-meta block truncate text-zinc-400">
                           {option.meta}
                         </span>
                       ) : null}
@@ -177,16 +172,14 @@ function DropdownControl(props: {
 export function Composer(props: ComposerProps) {
   const [text, setText] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const textareaFontSize = 14
-  const textareaLineHeight = 1.7
+  const textareaLineHeightPx = 14 * 1.7
 
   useEffect(() => {
     const textarea = textareaRef.current
     if (!textarea) return
 
-    const lineHeight = textareaFontSize * textareaLineHeight
-    const minHeight = lineHeight * 1.5
-    const maxHeight = lineHeight * 10
+    const minHeight = textareaLineHeightPx * 1.5
+    const maxHeight = textareaLineHeightPx * 10
 
     textarea.style.height = `${minHeight}px`
     const nextHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight)
@@ -211,8 +204,7 @@ export function Composer(props: ComposerProps) {
       <div className="pointer-events-auto mx-auto flex w-full max-w-4xl flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-[#fbfbfa] p-3 shadow-lg shadow-zinc-950/10">
         <textarea
           ref={textareaRef}
-          className="resize-none overflow-hidden bg-transparent px-2 py-0.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
-          style={{ fontSize: textareaFontSize, lineHeight: textareaLineHeight }}
+          className="composer-textarea resize-none overflow-hidden bg-transparent px-2 py-0.5 text-zinc-900 outline-none placeholder:text-zinc-400"
           value={text}
           disabled={props.disabled}
           placeholder="Ask opencode..."

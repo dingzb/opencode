@@ -25,7 +25,20 @@ body {
 button,
 textarea,
 input {
-  font: inherit;
+  font-family: inherit;
+}
+
+.composer-control {
+  font-size: 11px;
+}
+
+.composer-option-meta {
+  font-size: 10px;
+}
+
+.composer-textarea {
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .markdown {
