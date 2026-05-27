@@ -176,6 +176,23 @@ function DropdownControl(props: {
 
 export function Composer(props: ComposerProps) {
   const [text, setText] = useState("")
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaFontSize = 14
+  const textareaLineHeight = 1.7
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    const lineHeight = textareaFontSize * textareaLineHeight
+    const minHeight = lineHeight * 1.5
+    const maxHeight = lineHeight * 10
+
+    textarea.style.height = `${minHeight}px`
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight)
+    textarea.style.height = `${nextHeight}px`
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"
+  }, [text])
 
   const submit = async () => {
     if (props.stopping) return
@@ -191,9 +208,11 @@ export function Composer(props: ComposerProps) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 px-[calc(1.75rem+var(--chat-scrollbar-width)-2px)] pb-5 pt-10">
-      <div className="pointer-events-auto mx-auto flex w-full max-w-4xl flex-col gap-3 rounded-[24px] border border-zinc-200/80 bg-[#fbfbfa] p-3 shadow-lg shadow-zinc-950/10">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-4xl flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-[#fbfbfa] p-3 shadow-lg shadow-zinc-950/10">
         <textarea
-          className="max-h-40 min-h-12 resize-none bg-transparent px-2 py-2.5 text-sm leading-6 text-zinc-900 outline-none placeholder:text-zinc-400"
+          ref={textareaRef}
+          className="resize-none overflow-hidden bg-transparent px-2 py-0.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
+          style={{ fontSize: textareaFontSize, lineHeight: textareaLineHeight }}
           value={text}
           disabled={props.disabled}
           placeholder="Ask opencode..."
