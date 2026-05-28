@@ -1,5 +1,5 @@
-import { ArrowUp, Bot, Brain, Check, ChevronDown, Gauge, Plus, Search, Square } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { ArrowUp, Bot, Brain, Check, ChevronDown, ChevronRight, Plus, Search, Square, Zap } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import type { Agent, Model } from "@opencode-ai/sdk/v2/client"
 import { Button } from "./ui/button"
@@ -38,6 +38,12 @@ type DropdownOption = {
   meta?: string
 }
 
+type DropdownGroup = {
+  key: string
+  label: string
+  options: DropdownOption[]
+}
+
 function formatAgentName(name: string) {
   return name.charAt(0).toLocaleUpperCase() + name.slice(1)
 }
@@ -54,21 +60,36 @@ function DropdownControl(props: {
   disabled?: boolean
   placeholder: string
   options: DropdownOption[]
+  groups?: DropdownGroup[]
   searchable?: boolean
+  menuWidth?: string
+  showMeta?: boolean
   onChange: (value: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const ref = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const selected = props.options.find((option) => option.value === props.value)
+  const allOptions = props.groups ? props.groups.flatMap((g) => g.options) : props.options
+  const selected = allOptions.find((option) => option.value === props.value)
   const selectedTitle = selected ? [selected.label, selected.meta].filter(Boolean).join(" - ") : props.placeholder
   const normalizedQuery = query.trim().toLocaleLowerCase()
-  const visibleOptions = normalizedQuery
-    ? props.options.filter((option) =>
+  const hasQuery = normalizedQuery.length > 0
+  const visibleOptions = hasQuery
+    ? allOptions.filter((option) =>
         [option.label, option.meta].some((value) => value?.toLocaleLowerCase().includes(normalizedQuery)),
       )
     : props.options
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!open) return
@@ -110,7 +131,7 @@ function DropdownControl(props: {
         <ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
-        <div className="absolute bottom-full right-0 z-20 mb-2 w-[min(18rem,calc(100vw-24px))] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-xl shadow-zinc-950/10">
+        <div className={cn("absolute bottom-full right-0 z-20 mb-2 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-xl shadow-zinc-950/10", props.menuWidth ?? "w-[min(18rem,calc(100vw-24px))]")}>
           <div className="px-2 py-1.5 text-[11px] font-medium text-zinc-400">{props.label}</div>
           {props.searchable ? (
             <div className="mb-1 flex h-8 items-center gap-2 rounded-lg bg-zinc-50 px-2 text-zinc-400">
@@ -125,42 +146,92 @@ function DropdownControl(props: {
               />
             </div>
           ) : null}
-          {props.options.length === 0 ? (
+          {allOptions.length === 0 ? (
             <div className="px-2 py-2 text-[11px] text-zinc-500">{props.placeholder}</div>
-          ) : visibleOptions.length === 0 ? (
+          ) : visibleOptions.length === 0 && hasQuery ? (
             <div className="px-2 py-2 text-[11px] text-zinc-500">No matching models</div>
           ) : (
             <div className="max-h-64 overflow-y-auto">
-              {visibleOptions.map((option) => {
-                const active = option.value === props.value
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "composer-control flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-zinc-700 hover:bg-zinc-100",
-                      active && "bg-zinc-100 text-zinc-950",
-                    )}
-                    onClick={() => {
-                      props.onChange(option.value)
-                      setOpen(false)
-                    }}
-                    title={[option.label, option.meta].filter(Boolean).join(" - ")}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">
-                        {option.label}
-                      </span>
-                      {option.meta ? (
-                        <span className="composer-option-meta block truncate text-zinc-400">
-                          {option.meta}
+              {props.groups && !hasQuery
+                ? props.groups.map((group) => {
+                    const collapsed = collapsedGroups.has(group.key)
+                    return (
+                      <div key={group.key}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-1 rounded-lg px-2 py-1 text-left text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                          onClick={() => toggleGroup(group.key)}
+                        >
+                          {collapsed ? (
+                            <ChevronRight className="size-3 shrink-0" />
+                          ) : (
+                            <ChevronDown className="size-3 shrink-0" />
+                          )}
+                          <span className="min-w-0 truncate text-[11px] font-medium">
+                            {group.label}
+                          </span>
+                        </button>
+                        {!collapsed
+                          ? group.options.map((option) => {
+                              const active = option.value === props.value
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  className={cn(
+                                    "composer-control flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 pl-6 text-left text-zinc-700 hover:bg-zinc-100",
+                                    active && "bg-zinc-100 text-zinc-950",
+                                  )}
+                                  onClick={() => {
+                                    props.onChange(option.value)
+                                    setOpen(false)
+                                  }}
+                                  title={[option.label, option.meta].filter(Boolean).join(" - ")}
+                                >
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate">{option.label}</span>
+                                    {option.meta && props.showMeta !== false ? (
+                                      <span className="composer-option-meta block truncate text-zinc-400">
+                                        {option.meta}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  {active ? <Check className="size-3.5 shrink-0 text-zinc-700" /> : null}
+                                </button>
+                              )
+                            })
+                          : null}
+                      </div>
+                    )
+                  })
+                : visibleOptions.map((option) => {
+                    const active = option.value === props.value
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={cn(
+                          "composer-control flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-zinc-700 hover:bg-zinc-100",
+                          active && "bg-zinc-100 text-zinc-950",
+                        )}
+                        onClick={() => {
+                          props.onChange(option.value)
+                          setOpen(false)
+                        }}
+                        title={[option.label, option.meta].filter(Boolean).join(" - ")}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{option.label}</span>
+                          {option.meta && props.showMeta !== false ? (
+                            <span className="composer-option-meta block truncate text-zinc-400">
+                              {option.meta}
+                            </span>
+                          ) : null}
                         </span>
-                      ) : null}
-                    </span>
-                    {active ? <Check className="size-3.5 shrink-0 text-zinc-700" /> : null}
-                  </button>
-                )
-              })}
+                        {active ? <Check className="size-3.5 shrink-0 text-zinc-700" /> : null}
+                      </button>
+                    )
+                  })}
             </div>
           )}
         </div>
@@ -186,6 +257,24 @@ export function Composer(props: ComposerProps) {
     textarea.style.height = `${nextHeight}px`
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"
   }, [text])
+
+  const modelGroups = useMemo(() => {
+    const groups = new Map<string, DropdownOption[]>()
+    for (const option of props.modelOptions) {
+      const key = option.providerID
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push({
+        value: option.value,
+        label: option.model.name || option.modelID,
+        meta: option.providerName,
+      })
+    }
+    return Array.from(groups.entries()).map(([key, options]) => ({
+      key,
+      label: options[0]?.meta ?? key,
+      options,
+    }))
+  }, [props.modelOptions])
 
   const submit = async () => {
     if (props.stopping) return
@@ -226,13 +315,15 @@ export function Composer(props: ComposerProps) {
           >
             <Plus className="size-4 stroke-[2.2]" />
           </Button>
-          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden">
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
             <DropdownControl
               icon={<Bot className="size-3.5 shrink-0" />}
               label="Agent"
               value={props.selectedAgent}
               placeholder={props.agentLoading ? "Loading agents..." : "No primary agents"}
               disabled={props.disabled || props.agentLoading || props.agents.length === 0}
+              menuWidth="w-48"
+              showMeta={false}
               onChange={props.onAgentChange}
               options={props.agents.map((agent) => ({
                 value: agent.name,
@@ -247,20 +338,20 @@ export function Composer(props: ComposerProps) {
               placeholder={props.modelLoading ? "Loading models..." : "No configured models"}
               disabled={props.disabled || props.modelLoading || props.modelOptions.length === 0}
               searchable
+              menuWidth="w-56"
+              showMeta={false}
+              groups={modelGroups}
               onChange={props.onModelChange}
-              options={props.modelOptions.map((option) => ({
-                value: option.value,
-                label: option.model.name || option.modelID,
-                meta: option.providerName,
-              }))}
+              options={modelGroups.flatMap((g) => g.options)}
             />
             {props.variantOptions.length > 2 ? (
               <DropdownControl
-                icon={<Gauge className="size-3.5 shrink-0" />}
+                icon={<Zap className="size-3.5 shrink-0" />}
                 label="Reasoning"
                 value={props.selectedVariant ?? "default"}
                 placeholder="Default"
                 disabled={props.disabled}
+                menuWidth="w-40"
                 onChange={(value) => props.onVariantChange(value === "default" ? null : value)}
                 options={props.variantOptions.map((variant) => ({
                   value: variant,
