@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
 import {
   Blocks,
   BookOpen,
@@ -16,6 +16,7 @@ import {
   Settings,
 } from "lucide-react"
 import { cn } from "../lib/utils"
+import { startWindowDrag } from "../runtime/window-actions"
 
 export type SidebarPanel = "conversations" | "projects" | "plugins" | "knowledge" | "settings" | "help"
 
@@ -27,21 +28,76 @@ const sidebarPanels: Array<{ id: SidebarPanel; label: string; icon: typeof Messa
   { id: "help", label: "Help", icon: CircleHelp },
 ]
 
+const windowDragThreshold = 4
+
 export function TitleBar(props: {
   projectPath: string
   title: string
   serverState: "connected" | "connecting" | "error"
   sidebarCollapsed: boolean
   inspectorCollapsed: boolean
+  frameLeading?: ReactNode
+  frameTrailing?: ReactNode
+  className?: string
+  dragRegion?: boolean
   onToggleSidebar: () => void
   onNewProject: () => void
   onToggleInspector: () => void
 }) {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const suppressNextTitleBarClick = useRef(false)
+
+  const handleTitleBarMouseDown = (event: ReactMouseEvent<HTMLElement>) => {
+    if (!props.dragRegion || event.button !== 0) return
+    if (event.detail > 1) return
+
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    if (target.closest("input,textarea,select,[data-no-window-drag]")) return
+
+    const startX = event.clientX
+    const startY = event.clientY
+    const ownerDocument = event.currentTarget.ownerDocument
+
+    const cleanup = () => {
+      ownerDocument.removeEventListener("mousemove", handleMouseMove)
+      ownerDocument.removeEventListener("mouseup", cleanup)
+    }
+
+    const handleMouseMove = (moveEvent: globalThis.MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX
+      const deltaY = moveEvent.clientY - startY
+      if (Math.hypot(deltaX, deltaY) < windowDragThreshold) return
+
+      suppressNextTitleBarClick.current = true
+      cleanup()
+      moveEvent.preventDefault()
+      void startWindowDrag()
+    }
+
+    ownerDocument.addEventListener("mousemove", handleMouseMove)
+    ownerDocument.addEventListener("mouseup", cleanup, { once: true })
+  }
+
+  const handleTitleBarClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
+    if (!suppressNextTitleBarClick.current) return
+    suppressNextTitleBarClick.current = false
+    event.preventDefault()
+    event.stopPropagation()
+  }
 
   return (
-    <header className="grid h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center border-b border-zinc-200/80 bg-[#f7f7f5] px-2 sm:px-3 lg:grid-cols-[1fr_auto_1fr]">
-      <div className="flex min-w-0 items-center">
+    <header
+      className={cn(
+        "grid h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center border-b border-zinc-200/80 bg-[#f7f7f5] px-2 sm:px-3 lg:grid-cols-[1fr_auto_1fr]",
+        props.className,
+      )}
+      onMouseDown={handleTitleBarMouseDown}
+      onClickCapture={handleTitleBarClickCapture}
+      {...(props.dragRegion ? { "data-tauri-drag-region": true } : {})}
+    >
+      <div className="flex min-w-0 items-center gap-1">
+        {props.frameLeading}
         <button
           className="flex size-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
           title={props.sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
@@ -64,7 +120,10 @@ export function TitleBar(props: {
           <ChevronDown className="size-3.5 shrink-0 text-zinc-400 group-hover:text-zinc-600" />
         </button>
         {projectMenuOpen ? (
-          <div className="absolute top-11 z-20 w-[min(360px,calc(100vw-24px))] rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+          <div
+            className="absolute top-11 z-20 w-[min(360px,calc(100vw-24px))] rounded-md border border-zinc-200 bg-white p-1 shadow-lg"
+            data-no-window-drag
+          >
             <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400">
               Projects
             </div>
@@ -113,6 +172,7 @@ export function TitleBar(props: {
           >
             <Menu className="size-4" />
           </button>
+          {props.frameTrailing}
         </div>
       </div>
     </header>

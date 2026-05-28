@@ -9,6 +9,7 @@ import { LeftSidebar, RightInspector, type SidebarPanel, TitleBar } from "./comp
 import { SessionsPanel } from "./components/session-list"
 import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
+import { AppFrame } from "./shell/app-frame"
 
 const serverUrl = "http://localhost:4096"
 const selectedModelStoragePrefix = "buzi:model-selection:"
@@ -472,90 +473,96 @@ export function App() {
   const serverState = health.isError || path.isError ? "error" : connected ? "connected" : "connecting"
 
   return (
-    <div className="h-dvh bg-[#f7f7f5] text-zinc-950">
-      <main className="flex h-full min-h-0 flex-col">
-        <TitleBar
-          projectPath={directory ?? ""}
-          title={activeSession ? sessionTitle(activeSession) : "New session"}
-          serverState={serverState}
-          sidebarCollapsed={sidebarCollapsed}
-          inspectorCollapsed={inspectorCollapsed}
-          onToggleSidebar={() => {
-            setSidebarCollapsed((current) => !current)
-            if (!isFixedSidebar) setInspectorCollapsed(true)
-          }}
-          onNewProject={openProject}
-          onToggleInspector={() => {
-            setInspectorCollapsed((current) => !current)
-            if (!isFixedInspector) setSidebarCollapsed(true)
-          }}
-        />
-        <div className="flex min-h-0 flex-1">
-          {!sidebarCollapsed && !isFixedSidebar ? (
-            <button
-              className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
-              aria-label="Close sidebar overlay"
-              onClick={() => setSidebarCollapsed(true)}
-            />
-          ) : null}
-          <LeftSidebar
-            activePanel={activeSidebarPanel}
-            collapsed={sidebarCollapsed}
-            onClose={() => setSidebarCollapsed(true)}
-            onPanelChange={setActiveSidebarPanel}
-            conversations={
-              <SessionsPanel
-                sessions={state.sessions}
-                directory={directory}
-                activeSessionID={state.activeSessionID ?? undefined}
-                titleForSession={sessionTitle}
-                isSessionBusy={isSessionBusy}
-                onSelect={handleSessionSelect}
-                onNewSession={createSession}
-                loading={sessions.isLoading}
-              />
-            }
+    <AppFrame>
+      {(frameSlots) => (
+        <main className="flex h-full min-h-0 flex-col">
+          <TitleBar
+            projectPath={directory ?? ""}
+            title={activeSession ? sessionTitle(activeSession) : "New session"}
+            serverState={serverState}
+            sidebarCollapsed={sidebarCollapsed}
+            inspectorCollapsed={inspectorCollapsed}
+            frameLeading={frameSlots.leading}
+            frameTrailing={frameSlots.trailing}
+            className={frameSlots.titleBarClassName}
+            dragRegion={frameSlots.dragRegion}
+            onToggleSidebar={() => {
+              setSidebarCollapsed((current) => !current)
+              if (!isFixedSidebar) setInspectorCollapsed(true)
+            }}
+            onNewProject={openProject}
+            onToggleInspector={() => {
+              setInspectorCollapsed((current) => !current)
+              if (!isFixedInspector) setSidebarCollapsed(true)
+            }}
           />
-          <section className="relative flex min-w-0 flex-1 flex-col bg-[#fbfbfa]">
-            {health.isError || path.isError ? (
-              <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
-              </div>
+          <div className="flex min-h-0 flex-1">
+            {!sidebarCollapsed && !isFixedSidebar ? (
+              <button
+                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
+                aria-label="Close sidebar overlay"
+                onClick={() => setSidebarCollapsed(true)}
+              />
             ) : null}
-            <MessageTimeline
-              messages={activeMessages}
-              parts={state.parts}
-              loading={messages.isLoading || path.isLoading || sessions.isLoading}
+            <LeftSidebar
+              activePanel={activeSidebarPanel}
+              collapsed={sidebarCollapsed}
+              onClose={() => setSidebarCollapsed(true)}
+              onPanelChange={setActiveSidebarPanel}
+              conversations={
+                <SessionsPanel
+                  sessions={state.sessions}
+                  directory={directory}
+                  activeSessionID={state.activeSessionID ?? undefined}
+                  titleForSession={sessionTitle}
+                  isSessionBusy={isSessionBusy}
+                  onSelect={handleSessionSelect}
+                  onNewSession={createSession}
+                  loading={sessions.isLoading}
+                />
+              }
             />
-            <Composer
-              disabled={!enabled || health.isError}
-              working={activeSessionStatus?.type === "busy"}
-              stopping={stoppingSessionID === state.activeSessionID}
-              modelOptions={modelOptions}
-              selectedModel={selectedModelValue}
-              onModelChange={handleModelChange}
-              variantOptions={variantOptions}
-              selectedVariant={currentVariant}
-              onVariantChange={handleVariantChange}
-              modelLoading={providers.isLoading}
-              agents={primaryAgents}
-              selectedAgent={selectedAgent}
-              onAgentChange={setSelectedAgent}
-              agentLoading={agents.isLoading}
-              onSubmit={submit}
-              onStop={stop}
-            />
-          </section>
-          {!inspectorCollapsed && !isFixedInspector ? (
-            <button
-              className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] xl:hidden"
-              aria-label="Close inspector overlay"
-              onClick={() => setInspectorCollapsed(true)}
-            />
-          ) : null}
-          <RightInspector collapsed={inspectorCollapsed} onClose={() => setInspectorCollapsed(true)} />
-        </div>
-      </main>
-    </div>
+            <section className="relative flex min-w-0 flex-1 flex-col bg-[#fbfbfa]">
+              {health.isError || path.isError ? (
+                <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
+                </div>
+              ) : null}
+              <MessageTimeline
+                messages={activeMessages}
+                parts={state.parts}
+                loading={messages.isLoading || path.isLoading || sessions.isLoading}
+              />
+              <Composer
+                disabled={!enabled || health.isError}
+                working={activeSessionStatus?.type === "busy"}
+                stopping={stoppingSessionID === state.activeSessionID}
+                modelOptions={modelOptions}
+                selectedModel={selectedModelValue}
+                onModelChange={handleModelChange}
+                variantOptions={variantOptions}
+                selectedVariant={currentVariant}
+                onVariantChange={handleVariantChange}
+                modelLoading={providers.isLoading}
+                agents={primaryAgents}
+                selectedAgent={selectedAgent}
+                onAgentChange={setSelectedAgent}
+                agentLoading={agents.isLoading}
+                onSubmit={submit}
+                onStop={stop}
+              />
+            </section>
+            {!inspectorCollapsed && !isFixedInspector ? (
+              <button
+                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] xl:hidden"
+                aria-label="Close inspector overlay"
+                onClick={() => setInspectorCollapsed(true)}
+              />
+            ) : null}
+            <RightInspector collapsed={inspectorCollapsed} onClose={() => setInspectorCollapsed(true)} />
+          </div>
+        </main>
+      )}
+    </AppFrame>
   )
 }
