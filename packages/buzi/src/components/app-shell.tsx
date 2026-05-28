@@ -40,7 +40,7 @@ export function TitleBar(props: {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
 
   return (
-    <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-zinc-200/80 bg-[#f7f7f5] px-3">
+    <header className="grid h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center border-b border-zinc-200/80 bg-[#f7f7f5] px-2 sm:px-3 lg:grid-cols-[1fr_auto_1fr]">
       <div className="flex min-w-0 items-center">
         <button
           className="flex size-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
@@ -52,19 +52,19 @@ export function TitleBar(props: {
       </div>
       <div className="relative flex min-w-0 justify-center">
         <button
-          className="group flex min-w-0 max-w-[520px] items-center gap-2 rounded-md px-3 py-1 text-center hover:bg-zinc-100"
+          className="group flex min-w-0 max-w-[160px] items-center gap-1 rounded-md px-2 py-1 text-center hover:bg-zinc-100 min-[420px]:max-w-[220px] sm:max-w-[360px] sm:gap-2 sm:px-3 lg:max-w-[520px]"
           onClick={() => setProjectMenuOpen((current) => !current)}
         >
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold leading-4 text-zinc-950">
+            <div className="truncate text-[11px] font-semibold leading-4 text-zinc-950 min-[420px]:text-[12px] sm:text-[13px]">
               {props.projectPath || "No project selected"}
             </div>
-            <div className="truncate text-[11px] font-medium leading-4 text-zinc-500">{props.title}</div>
+            <div className="truncate text-[10px] font-medium leading-4 text-zinc-500 sm:text-[11px]">{props.title}</div>
           </div>
           <ChevronDown className="size-3.5 shrink-0 text-zinc-400 group-hover:text-zinc-600" />
         </button>
         {projectMenuOpen ? (
-          <div className="absolute top-11 z-20 w-[360px] rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+          <div className="absolute top-11 z-20 w-[min(360px,calc(100vw-24px))] rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
             <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400">
               Projects
             </div>
@@ -108,7 +108,7 @@ export function TitleBar(props: {
             {props.inspectorCollapsed ? <PanelRight className="size-4" /> : <PanelRightClose className="size-4" />}
           </button>
           <button
-            className="flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
+            className="hidden size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950 sm:flex"
             title="Application menu"
           >
             <Menu className="size-4" />
@@ -119,13 +119,25 @@ export function TitleBar(props: {
   )
 }
 
-export function RightInspector(props: { collapsed: boolean }) {
-  if (props.collapsed) return null
-
+export function RightInspector(props: { collapsed: boolean; onClose: () => void }) {
   return (
-    <aside className="flex h-full w-[304px] shrink-0 flex-col border-l border-zinc-200/80 bg-[#f1f1ef]">
-      <div className="flex h-11 shrink-0 items-center border-b border-zinc-200/80 px-3">
+    <aside
+      aria-hidden={props.collapsed}
+      className={cn(
+        "fixed bottom-3 right-3 top-[3.75rem] z-30 flex w-[min(360px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden rounded-l-xl rounded-r-md border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out xl:static xl:h-full xl:w-[304px] xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none",
+        props.collapsed &&
+          "pointer-events-none translate-x-[calc(100%+0.75rem)] opacity-0 xl:w-0 xl:translate-x-0 xl:border-transparent",
+      )}
+    >
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 px-3">
         <div className="truncate text-[13px] font-semibold text-zinc-950">Inspector</div>
+        <button
+          className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950 xl:hidden"
+          title="Close inspector"
+          onClick={props.onClose}
+        >
+          <PanelRightClose className="size-4" />
+        </button>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center px-8 text-center">
         <div>
@@ -140,15 +152,21 @@ export function RightInspector(props: { collapsed: boolean }) {
 export function LeftSidebar(props: {
   activePanel: SidebarPanel
   collapsed: boolean
+  onClose: () => void
   onPanelChange: (panel: SidebarPanel) => void
   conversations: ReactNode
 }) {
-  if (props.collapsed) return null
-
   const feature = sidebarPanels.find((panel) => panel.id === props.activePanel)
 
   return (
-    <aside className="flex h-full w-[304px] shrink-0 flex-col border-r border-zinc-200/80 bg-[#f1f1ef]">
+    <aside
+      aria-hidden={props.collapsed}
+      className={cn(
+        "fixed bottom-3 left-3 top-[3.75rem] z-30 flex w-[min(340px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden rounded-l-md rounded-r-xl border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out md:static md:h-full md:w-[304px] md:rounded-none md:border-y-0 md:border-l-0 md:shadow-none",
+        props.collapsed &&
+          "pointer-events-none -translate-x-[calc(100%+0.75rem)] opacity-0 md:w-0 md:translate-x-0 md:border-transparent",
+      )}
+    >
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <MessageCircle className="size-4 shrink-0 text-zinc-500" />
@@ -156,14 +174,23 @@ export function LeftSidebar(props: {
             {props.activePanel === "conversations" ? "Conversations" : feature?.label}
           </div>
         </div>
-        {props.activePanel !== "conversations" ? (
+        <div className="flex shrink-0 items-center gap-1">
+          {props.activePanel !== "conversations" ? (
+            <button
+              className="flex h-7 items-center rounded-md px-2 text-xs text-zinc-500 hover:bg-white/70 hover:text-zinc-950"
+              onClick={() => props.onPanelChange("conversations")}
+            >
+              Sessions
+            </button>
+          ) : null}
           <button
-            className="flex h-7 items-center rounded-md px-2 text-xs text-zinc-500 hover:bg-white/70 hover:text-zinc-950"
-            onClick={() => props.onPanelChange("conversations")}
+            className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950 md:hidden"
+            title="Close sidebar"
+            onClick={props.onClose}
           >
-            Sessions
+            <PanelLeftClose className="size-4" />
           </button>
-        ) : null}
+        </div>
       </div>
       <div className="min-h-0 flex-1">
         {props.activePanel === "conversations" ? props.conversations : <FeaturePanel panel={feature} />}

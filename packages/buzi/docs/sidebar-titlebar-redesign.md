@@ -107,3 +107,22 @@ The first pass should:
 - Add a placeholder `RightInspector` with show/hide behavior.
 
 The first pass does not need to implement real Projects, Plugins, Knowledge, Settings, or Help views. Placeholder sidebar panels are enough to establish the navigation model.
+
+## Responsive Layout
+
+Buzi uses four responsive modes:
+
+```text
+Large    >= 1200px   Sidebar + Chat + Inspector
+Medium   >= 900px    Sidebar + Chat, Inspector as overlay
+Narrow   >= 640px    Chat first, Sidebar/Inspector as overlay drawers
+Mobile   < 640px     Compact title bar, Chat only, drawers become near-full-width panels
+```
+
+Rules:
+
+- The chat view is always the primary surface.
+- Sidebar and Inspector do not disappear; they change from fixed panels to overlay drawers.
+- On mobile, the title bar compresses the centered title and keeps only shell controls.
+- The composer must fit within the viewport and respect mobile safe-area insets.
+- Inspector remains a right-side drawer on tablet and becomes a near-full-width sheet on phone.

@@ -69,6 +69,22 @@ function writeSelectedVariant(directory: string | undefined, value: string | nul
   window.localStorage.setItem(key, value ?? selectedVariantDefaultValue)
 }
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const update = () => setMatches(media.matches)
+    update()
+    media.addEventListener("change", update)
+    return () => media.removeEventListener("change", update)
+  }, [query])
+
+  return matches
+}
+
 export function App() {
   const queryClient = useQueryClient()
   const [directory, setDirectory] = useState<string>()
@@ -76,6 +92,8 @@ export function App() {
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("conversations")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
+  const isFixedSidebar = useMediaQuery("(min-width: 768px)")
+  const isFixedInspector = useMediaQuery("(min-width: 1280px)")
   const [selectedModelValue, setSelectedModelValue] = useState("")
   const [selectedVariant, setSelectedVariant] = useState<string | null | undefined>()
   const [restoredModelSessions, setRestoredModelSessions] = useState<Set<string>>(() => new Set())
@@ -218,6 +236,14 @@ export function App() {
     setSelectedAgent("")
     setRestoredModelSessions(new Set())
   }, [directory])
+
+  useEffect(() => {
+    setSidebarCollapsed(!isFixedSidebar)
+  }, [isFixedSidebar])
+
+  useEffect(() => {
+    setInspectorCollapsed(!isFixedInspector)
+  }, [isFixedInspector])
 
   useEffect(() => {
     if (modelOptions.length === 0) return
@@ -454,14 +480,28 @@ export function App() {
           serverState={serverState}
           sidebarCollapsed={sidebarCollapsed}
           inspectorCollapsed={inspectorCollapsed}
-          onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
+          onToggleSidebar={() => {
+            setSidebarCollapsed((current) => !current)
+            if (!isFixedSidebar) setInspectorCollapsed(true)
+          }}
           onNewProject={openProject}
-          onToggleInspector={() => setInspectorCollapsed((current) => !current)}
+          onToggleInspector={() => {
+            setInspectorCollapsed((current) => !current)
+            if (!isFixedInspector) setSidebarCollapsed(true)
+          }}
         />
         <div className="flex min-h-0 flex-1">
+          {!sidebarCollapsed && !isFixedSidebar ? (
+            <button
+              className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
+              aria-label="Close sidebar overlay"
+              onClick={() => setSidebarCollapsed(true)}
+            />
+          ) : null}
           <LeftSidebar
             activePanel={activeSidebarPanel}
             collapsed={sidebarCollapsed}
+            onClose={() => setSidebarCollapsed(true)}
             onPanelChange={setActiveSidebarPanel}
             conversations={
               <SessionsPanel
@@ -506,7 +546,14 @@ export function App() {
               onStop={stop}
             />
           </section>
-          <RightInspector collapsed={inspectorCollapsed} />
+          {!inspectorCollapsed && !isFixedInspector ? (
+            <button
+              className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] xl:hidden"
+              aria-label="Close inspector overlay"
+              onClick={() => setInspectorCollapsed(true)}
+            />
+          ) : null}
+          <RightInspector collapsed={inspectorCollapsed} onClose={() => setInspectorCollapsed(true)} />
         </div>
       </main>
     </div>
