@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, FolderPlus, LoaderCircle, MessageSquarePlus, Plus } from "lucide-react"
+import { LoaderCircle, MessageSquarePlus, Search } from "lucide-react"
 import { useMemo, useState } from "react"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import { cn } from "../lib/utils"
@@ -38,33 +38,36 @@ function relativeTime(value: number) {
   return `${Math.floor(seconds / year)}y`
 }
 
-type ProjectGroup = {
+type SessionGroup = {
   id: string
   name: string
   sessions: Session[]
 }
 
-function projectGroups(sessions: Session[], directory: string | undefined) {
-  const groups = new Map<string, ProjectGroup>()
+function startOfDay(value: number) {
+  const date = new Date(value)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+function timeGroups(sessions: Session[]) {
+  const now = startOfDay(Date.now())
+  const day = 24 * 60 * 60 * 1000
+  const groups: SessionGroup[] = [
+    { id: "today", name: "Today", sessions: [] },
+    { id: "yesterday", name: "Yesterday", sessions: [] },
+    { id: "previous-7-days", name: "Previous 7 Days", sessions: [] },
+    { id: "earlier", name: "Earlier", sessions: [] },
+  ]
+
   for (const session of sessions) {
-    const key = session.projectID || session.directory || "__current__"
-    const existing = groups.get(key)
-    if (existing) {
-      existing.sessions.push(session)
-      continue
-    }
-    groups.set(key, {
-      id: key,
-      name: session.directory || directory || "Current project",
-      sessions: [session],
-    })
+    const age = now - startOfDay(sessionTime(session))
+    const group =
+      age < day ? groups[0] : age < day * 2 ? groups[1] : age < day * 8 ? groups[2] : groups[3]
+    group.sessions.push(session)
   }
 
-  if (groups.size === 0) {
-    groups.set("__current__", { id: "__current__", name: directory || "Current project", sessions: [] })
-  }
-
-  return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name))
+  return groups.filter((group) => group.sessions.length > 0)
 }
 
 export function SessionsPanel(props: {
@@ -74,16 +77,23 @@ export function SessionsPanel(props: {
   titleForSession?: (session: Session) => string
   isSessionBusy?: (sessionID: string) => boolean
   onSelect: (sessionID: string) => void
-  onNewProject: () => void
   onNewSession: (projectID?: string) => void
   loading: boolean
-  projectLoading?: boolean
 }) {
-  const groups = useMemo(() => projectGroups(props.sessions, props.directory), [props.directory, props.sessions])
+  const [query, setQuery] = useState("")
+  const filteredSessions = useMemo(() => {
+    const term = query.trim().toLocaleLowerCase()
+    if (!term) return props.sessions
+    return props.sessions.filter((session) => {
+      const label = props.titleForSession?.(session) ?? title(session)
+      return label.toLocaleLowerCase().includes(term)
+    })
+  }, [props.sessions, props.titleForSession, query])
+  const groups = useMemo(() => timeGroups(filteredSessions), [filteredSessions])
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(() => new Set())
 
-  function groupKey(group: ProjectGroup) {
+  function groupKey(group: SessionGroup) {
     return group.id
   }
 
@@ -107,14 +117,22 @@ export function SessionsPanel(props: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-zinc-200/80 px-3 py-3">
+      <div className="space-y-2 border-b border-zinc-200/80 px-3 py-3">
+        <div className="flex h-8 items-center gap-2 rounded-md bg-white px-2 text-zinc-500 ring-1 ring-zinc-200/80">
+          <Search className="size-3.5 shrink-0" />
+          <input
+            className="min-w-0 flex-1 bg-transparent text-xs text-zinc-900 outline-none placeholder:text-zinc-400"
+            placeholder="Search sessions"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
         <button
-          className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-zinc-600 transition-colors hover:bg-white/70 hover:text-zinc-950 disabled:pointer-events-none disabled:opacity-50"
-          onClick={props.onNewProject}
-          disabled={props.projectLoading}
+          className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-zinc-600 transition-colors hover:bg-white/70 hover:text-zinc-950"
+          onClick={() => props.onNewSession()}
         >
-          <FolderPlus className="size-4" />
-          New Project
+          <MessageSquarePlus className="size-4" />
+          New Session
         </button>
       </div>
       <div className="sidebar-scrollbar min-h-0 flex-1 overflow-y-auto px-1 py-2">
@@ -129,24 +147,14 @@ export function SessionsPanel(props: {
           const hasHiddenSessions = group.sessions.length > defaultVisibleSessionCount
           return (
             <div key={key} className="mb-2">
-              <div className="group flex h-8 items-center gap-1 rounded-md px-1 text-zinc-700 hover:bg-white/70">
+              <div className="group flex h-8 items-center gap-1 px-2 text-zinc-700">
                 <button
-                  className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded px-1 text-left"
+                  className="flex h-7 min-w-0 flex-1 items-center rounded px-1 text-left"
                   onClick={() => toggleGroup(key)}
                 >
-                  {isCollapsed ? (
-                    <Folder className="size-3.5 shrink-0 text-zinc-500" />
-                  ) : (
-                    <FolderOpen className="size-3.5 shrink-0 text-zinc-500" />
-                  )}
-                  <span className="truncate text-xs font-semibold">{group.name}</span>
-                </button>
-                <button
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-zinc-500 opacity-80 hover:bg-zinc-100 hover:text-zinc-950 group-hover:opacity-100"
-                  title="New session"
-                  onClick={() => props.onNewSession()}
-                >
-                  <Plus className="size-3.5" />
+                  <span className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                    {group.name}
+                  </span>
                 </button>
               </div>
               {!isCollapsed ? (
@@ -156,7 +164,7 @@ export function SessionsPanel(props: {
                       key={session.id}
                       title={`Last activity: ${subtitle(session)}`}
                       className={cn(
-                        "flex h-8 w-full items-center gap-2 rounded-md pl-7 pr-2.5 text-left transition-colors",
+                        "flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left transition-colors",
                         props.activeSessionID === session.id
                           ? "bg-white"
                           : "hover:bg-white/70",
@@ -174,11 +182,11 @@ export function SessionsPanel(props: {
                     </button>
                   ))}
                   {!props.loading && group.sessions.length === 0 ? (
-                    <div className="px-2.5 py-2 pl-7 text-xs text-zinc-500">No sessions</div>
+                    <div className="px-2.5 py-2 text-xs text-zinc-500">No sessions</div>
                   ) : null}
                   {hasHiddenSessions ? (
                     <button
-                      className="flex h-7 w-full items-center rounded-md pl-7 pr-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
+                      className="flex h-7 w-full items-center rounded-md px-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
                       onClick={() => toggleSessionExpansion(key)}
                     >
                       {sessionsExpanded ? "折叠显示" : `展开显示 ${group.sessions.length - defaultVisibleSessionCount} 个`}

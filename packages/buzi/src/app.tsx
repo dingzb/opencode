@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { MoreHorizontal, Trash2 } from "lucide-react"
 import type { Agent, Model } from "@opencode-ai/sdk/v2/client"
 import { createOpencodeSdk } from "./lib/opencode"
 import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
-import { ActivityBar, type ActivityID, SidePanel } from "./components/app-shell"
+import { LeftSidebar, RightInspector, type SidebarPanel, TitleBar } from "./components/app-shell"
 import { SessionsPanel } from "./components/session-list"
 import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
@@ -74,9 +73,9 @@ export function App() {
   const queryClient = useQueryClient()
   const [directory, setDirectory] = useState<string>()
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
-  const [activeActivity, setActiveActivity] = useState<ActivityID>("sessions")
-  const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false)
-  const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("conversations")
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
   const [selectedModelValue, setSelectedModelValue] = useState("")
   const [selectedVariant, setSelectedVariant] = useState<string | null | undefined>()
   const [restoredModelSessions, setRestoredModelSessions] = useState<Set<string>>(() => new Set())
@@ -343,18 +342,6 @@ export function App() {
     setSelectedVariant(undefined)
   }, [])
 
-  const handleActivityClick = useCallback(
-    (activity: ActivityID) => {
-      if (activity === activeActivity) {
-        setSidePanelCollapsed((current) => !current)
-        return
-      }
-      setActiveActivity(activity)
-      setSidePanelCollapsed(false)
-    },
-    [activeActivity],
-  )
-
   const openProject = useCallback(() => {
     window.alert("Project picker is not implemented yet.")
   }, [])
@@ -365,21 +352,6 @@ export function App() {
     setSelectedModelValue("")
     setSelectedVariant(undefined)
   }, [enabled])
-
-  const deleteActiveSession = useCallback(async () => {
-    const sessionID = state.activeSessionID
-    if (!sessionID) return
-    const session = state.sessions.find((item) => item.id === sessionID)
-    const label = session?.title || session?.slug || "this session"
-    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return
-
-    await sdk.session.delete({ sessionID })
-    const nextSession = state.sessions.find((item) => item.id !== sessionID)
-    dispatch({ type: "session.remove", sessionID })
-    dispatch({ type: "session.active", sessionID: nextSession?.id })
-    setSessionMenuOpen(false)
-    refresh()
-  }, [refresh, sdk, state.activeSessionID, state.sessions])
 
   const submit = useCallback(
     async (text: string) => {
@@ -471,94 +443,71 @@ export function App() {
   ])
   const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
   const connected = health.data?.healthy === true && status === "connected"
-  const connectionText =
-    health.isError || path.isError
-      ? "Server unavailable"
-      : connected
-        ? "Connected"
-        : status === "connecting"
-          ? "Syncing"
-          : "Connecting"
+  const serverState = health.isError || path.isError ? "error" : connected ? "connected" : "connecting"
 
   return (
     <div className="h-dvh bg-[#f7f7f5] text-zinc-950">
-      <main className="flex h-full min-h-0">
-        <ActivityBar
-          activeActivity={activeActivity}
-          panelCollapsed={sidePanelCollapsed}
-          onActivityClick={handleActivityClick}
+      <main className="flex h-full min-h-0 flex-col">
+        <TitleBar
+          projectPath={directory ?? ""}
+          title={activeSession ? sessionTitle(activeSession) : "New session"}
+          serverState={serverState}
+          sidebarCollapsed={sidebarCollapsed}
+          inspectorCollapsed={inspectorCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
+          onNewProject={openProject}
+          onToggleInspector={() => setInspectorCollapsed((current) => !current)}
         />
-        <SidePanel title="Sessions" collapsed={sidePanelCollapsed} onCollapse={() => setSidePanelCollapsed(true)}>
-          <SessionsPanel
-            sessions={state.sessions}
-            directory={directory}
-            activeSessionID={state.activeSessionID ?? undefined}
-            titleForSession={sessionTitle}
-            isSessionBusy={isSessionBusy}
-            onSelect={handleSessionSelect}
-            onNewProject={openProject}
-            onNewSession={createSession}
-            loading={sessions.isLoading}
+        <div className="flex min-h-0 flex-1">
+          <LeftSidebar
+            activePanel={activeSidebarPanel}
+            collapsed={sidebarCollapsed}
+            onPanelChange={setActiveSidebarPanel}
+            conversations={
+              <SessionsPanel
+                sessions={state.sessions}
+                directory={directory}
+                activeSessionID={state.activeSessionID ?? undefined}
+                titleForSession={sessionTitle}
+                isSessionBusy={isSessionBusy}
+                onSelect={handleSessionSelect}
+                onNewSession={createSession}
+                loading={sessions.isLoading}
+              />
+            }
           />
-        </SidePanel>
-        <section className="relative flex min-w-0 flex-1 flex-col bg-[#fbfbfa]">
-          <header className="flex h-11 items-center justify-between border-b border-zinc-200/80 bg-[#fbfbfa] px-4">
-            <div className="min-w-0">
-              <div className="truncate text-[14px] font-semibold text-zinc-950">
-                {activeSession ? sessionTitle(activeSession) : "New session"}
+          <section className="relative flex min-w-0 flex-1 flex-col bg-[#fbfbfa]">
+            {health.isError || path.isError ? (
+              <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
               </div>
-            </div>
-            <div className="relative">
-              <button
-                className="flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
-                title="Session actions"
-                onClick={() => setSessionMenuOpen((current) => !current)}
-                disabled={!state.activeSessionID}
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
-              {sessionMenuOpen ? (
-                <div className="absolute right-0 top-9 z-20 w-44 rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
-                  <button
-                    className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-xs text-red-600 hover:bg-red-50"
-                    onClick={deleteActiveSession}
-                  >
-                    <Trash2 className="size-3.5" />
-                    Delete session
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </header>
-          {health.isError || path.isError ? (
-            <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
-            </div>
-          ) : null}
-          <MessageTimeline
-            messages={activeMessages}
-            parts={state.parts}
-            loading={messages.isLoading || path.isLoading || sessions.isLoading}
-          />
-          <Composer
-            disabled={!enabled || health.isError}
-            working={activeSessionStatus?.type === "busy"}
-            stopping={stoppingSessionID === state.activeSessionID}
-            modelOptions={modelOptions}
-            selectedModel={selectedModelValue}
-            onModelChange={handleModelChange}
-            variantOptions={variantOptions}
-            selectedVariant={currentVariant}
-            onVariantChange={handleVariantChange}
-            modelLoading={providers.isLoading}
-            agents={primaryAgents}
-            selectedAgent={selectedAgent}
-            onAgentChange={setSelectedAgent}
-            agentLoading={agents.isLoading}
-            onSubmit={submit}
-            onStop={stop}
-          />
-        </section>
+            ) : null}
+            <MessageTimeline
+              messages={activeMessages}
+              parts={state.parts}
+              loading={messages.isLoading || path.isLoading || sessions.isLoading}
+            />
+            <Composer
+              disabled={!enabled || health.isError}
+              working={activeSessionStatus?.type === "busy"}
+              stopping={stoppingSessionID === state.activeSessionID}
+              modelOptions={modelOptions}
+              selectedModel={selectedModelValue}
+              onModelChange={handleModelChange}
+              variantOptions={variantOptions}
+              selectedVariant={currentVariant}
+              onVariantChange={handleVariantChange}
+              modelLoading={providers.isLoading}
+              agents={primaryAgents}
+              selectedAgent={selectedAgent}
+              onAgentChange={setSelectedAgent}
+              agentLoading={agents.isLoading}
+              onSubmit={submit}
+              onStop={stop}
+            />
+          </section>
+          <RightInspector collapsed={inspectorCollapsed} />
+        </div>
       </main>
     </div>
   )
