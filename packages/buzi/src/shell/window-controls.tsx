@@ -1,6 +1,7 @@
-import { Minus, Square, X } from "lucide-react"
-import type { ReactNode } from "react"
+import { Copy, Minus, Square, X } from "lucide-react"
+import { useEffect, useState, type ReactNode } from "react"
 import { closeWindow, minimizeWindow, toggleMaximizeWindow } from "../runtime/window-actions"
+import { getRuntimePlatform } from "../runtime/platform"
 import type { DesktopPlatform } from "../runtime/platform"
 import { cn } from "../lib/utils"
 
@@ -9,7 +10,29 @@ export function WindowControls(props: { os: DesktopPlatform }) {
   return <StandardWindowControls />
 }
 
+function useIsMaximized() {
+  const [maximized, setMaximized] = useState(false)
+
+  useEffect(() => {
+    if (!getRuntimePlatform().isTauri) return
+    let unlisten: (() => void) | undefined
+
+    ;(async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window")
+      const win = getCurrentWindow()
+      setMaximized(await win.isMaximized())
+      unlisten = await win.onResized(() => void win.isMaximized().then(setMaximized))
+    })()
+
+    return () => unlisten?.()
+  }, [])
+
+  return maximized
+}
+
 function MacWindowControls() {
+  const maximized = useIsMaximized()
+
   return (
     <div className="window-controls window-controls-mac" data-tauri-drag-region={false}>
       <button
@@ -24,7 +47,7 @@ function MacWindowControls() {
       />
       <button
         className="window-control-mac bg-[#28c840]"
-        title="Maximize"
+        title={maximized ? "Restore" : "Maximize"}
         onClick={() => void toggleMaximizeWindow()}
       />
     </div>
@@ -32,13 +55,15 @@ function MacWindowControls() {
 }
 
 function StandardWindowControls() {
+  const maximized = useIsMaximized()
+
   return (
     <div className="window-controls window-controls-standard" data-tauri-drag-region={false}>
       <WindowButton title="Minimize" onClick={minimizeWindow}>
         <Minus className="size-3.5" />
       </WindowButton>
-      <WindowButton title="Maximize" onClick={toggleMaximizeWindow}>
-        <Square className="size-3" />
+      <WindowButton title={maximized ? "Restore" : "Maximize"} onClick={toggleMaximizeWindow}>
+        {maximized ? <Copy className="size-3" /> : <Square className="size-3" />}
       </WindowButton>
       <WindowButton title="Close" destructive onClick={closeWindow}>
         <X className="size-3.5" />

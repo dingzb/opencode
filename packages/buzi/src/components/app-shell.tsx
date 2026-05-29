@@ -16,7 +16,7 @@ import {
   Settings,
 } from "lucide-react"
 import { cn } from "../lib/utils"
-import { startWindowDrag } from "../runtime/window-actions"
+import { startWindowDrag, toggleMaximizeWindow } from "../runtime/window-actions"
 
 export type SidebarPanel = "conversations" | "projects" | "plugins" | "knowledge" | "settings" | "help"
 
@@ -52,7 +52,7 @@ export function TitleBar(props: {
 
     const target = event.target
     if (!(target instanceof HTMLElement)) return
-    if (target.closest("input,textarea,select,[data-no-window-drag]")) return
+    if (target.closest("button,[role='button'],input,textarea,select,[data-no-window-drag]")) return
 
     const startX = event.clientX
     const startY = event.clientY
@@ -81,8 +81,15 @@ export function TitleBar(props: {
   const handleTitleBarClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
     if (!suppressNextTitleBarClick.current) return
     suppressNextTitleBarClick.current = false
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest("button,[role='button'],input,textarea,select,a")) return
     event.preventDefault()
     event.stopPropagation()
+  }
+
+  const handleTitleBarDoubleClick = () => {
+    if (!props.dragRegion) return
+    void toggleMaximizeWindow()
   }
 
   return (
@@ -94,6 +101,7 @@ export function TitleBar(props: {
       )}
       onMouseDown={handleTitleBarMouseDown}
       onClickCapture={handleTitleBarClickCapture}
+      onDoubleClick={handleTitleBarDoubleClick}
       {...(props.dragRegion ? { "data-tauri-drag-region": true } : {})}
     >
       <div className="flex min-w-0 items-center gap-1">

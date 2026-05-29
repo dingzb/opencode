@@ -12,6 +12,7 @@
         "center": true,
         "resizable": true,
         "decorations": false,
+        "visible": false,
         "fullscreen": false
       }
     ]
