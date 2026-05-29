@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder, FolderPlus, LoaderCircle, MessageSquarePlus, Search } from "lucide-react"
+import { ChevronDown, ChevronRight, Folder, FolderPlus, Folders, LoaderCircle, MessageSquarePlus, Search } from "lucide-react"
 import { useMemo, useState } from "react"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import type { BuziProject } from "../types/project"
@@ -64,7 +64,7 @@ function projectSessions(project: BuziProject, sessions: Session[]) {
   )
 }
 
-export function SessionsPanel(props: {
+export function ProjectsPanel(props: {
   projects: BuziProject[]
   sessions: Session[]
   directory?: string
@@ -72,13 +72,15 @@ export function SessionsPanel(props: {
   titleForSession?: (session: Session) => string
   isSessionBusy?: (sessionID: string) => boolean
   onSelect: (sessionID: string) => void
-  onNewSession: () => void
+  onNewSession: (project: BuziProject) => void
   onAddProject: () => void
+  query: string
+  onSearchChange: (query: string) => void
   loading: boolean
 }) {
-  const [query, setQuery] = useState("")
+  const [searchOpen, setSearchOpen] = useState(false)
   const projects = useMemo(() => {
-    const term = query.trim().toLocaleLowerCase()
+    const term = props.query.trim().toLocaleLowerCase()
     return props.projects
       .map((project) => {
         const sessions = projectSessions(project, props.sessions)
@@ -97,7 +99,7 @@ export function SessionsPanel(props: {
         const newestB = b.sessions[0] ? sessionTime(b.sessions[0]) : b.project.time.updated ?? b.project.time.created
         return newestB - newestA
       })
-  }, [props.projects, props.sessions, props.titleForSession, query])
+  }, [props.projects, props.sessions, props.titleForSession, props.query])
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(() => new Set())
 
@@ -121,35 +123,44 @@ export function SessionsPanel(props: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="space-y-2 border-b border-zinc-200/80 px-3 py-3">
-        <div className="flex h-8 items-center gap-2 rounded-md bg-white px-2 text-zinc-500 ring-1 ring-zinc-200/80">
-          <Search className="size-3.5 shrink-0" />
-          <input
-            className="min-w-0 flex-1 bg-transparent text-xs text-zinc-900 outline-none placeholder:text-zinc-400"
-            placeholder="Search sessions"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-zinc-200/80 px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Folders className="size-4 shrink-0 text-zinc-500" />
+          <div className="truncate text-[13px] font-semibold text-zinc-950">Projects</div>
         </div>
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <button
-            className="flex h-8 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-white/70 hover:text-zinc-950"
-            onClick={() => props.onNewSession()}
+            className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950"
+            title="Search projects & chats"
+            onClick={() => setSearchOpen(!searchOpen)}
           >
-            <MessageSquarePlus className="size-4 shrink-0" />
-            <span className="truncate">New Session</span>
+            <Search className="size-4" />
           </button>
           <button
-            className="flex h-8 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-white/70 hover:text-zinc-950"
+            className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950"
+            title="Add project"
             onClick={props.onAddProject}
           >
-            <FolderPlus className="size-4 shrink-0" />
-            <span className="truncate">Add Project</span>
+            <FolderPlus className="size-4" />
           </button>
         </div>
       </div>
-      <div className="sidebar-scrollbar min-h-0 flex-1 overflow-y-auto px-1 py-2">
-        {props.loading ? <div className="px-3 py-4 text-sm text-zinc-500">Loading projects...</div> : null}
+      {searchOpen ? (
+        <div className="border-b border-zinc-200/80 px-4 py-2">
+          <div className="flex h-8 items-center gap-2 rounded-md bg-white px-2 text-zinc-500 ring-1 ring-zinc-200/80">
+            <Search className="size-3.5 shrink-0" />
+            <input
+              className="min-w-0 flex-1 bg-transparent text-xs text-zinc-900 outline-none placeholder:text-zinc-400"
+              placeholder="Search projects & chats"
+              value={props.query}
+              onChange={(event) => props.onSearchChange(event.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+      ) : null}
+      <div className="sidebar-scrollbar min-h-0 flex-1 overflow-y-auto pl-4 pr-0 py-2">
+        {props.loading ? <div className="py-4 text-sm text-zinc-500">Loading projects...</div> : null}
         {projects.map((item) => {
           const isCollapsed = collapsed.has(item.project.id)
           const sessionsExpanded = expandedSessions.has(item.project.id)
@@ -159,9 +170,9 @@ export function SessionsPanel(props: {
           const hasHiddenSessions = item.sessions.length > defaultVisibleSessionCount
           return (
             <div key={item.project.id} className="mb-2">
-              <div className="group flex h-8 items-center gap-1 px-1 text-zinc-700">
+              <div className="group flex h-8 w-full items-center gap-1 rounded-md text-zinc-700 transition-colors hover:bg-white/70">
                 <button
-                  className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 text-left transition-colors hover:bg-white/70"
+                  className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 text-left"
                   onClick={() => toggleProject(item.project.id)}
                 >
                   {isCollapsed ? <ChevronRight className="size-3.5 shrink-0" /> : <ChevronDown className="size-3.5 shrink-0" />}
@@ -171,15 +182,22 @@ export function SessionsPanel(props: {
                   </span>
                   <span className="shrink-0 text-[11px] text-zinc-500">{item.sessions.length}</span>
                 </button>
+                <button
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-white/90 hover:text-zinc-950"
+                  title="New Chat"
+                  onClick={() => props.onNewSession(item.project)}
+                >
+                  <MessageSquarePlus className="size-4" />
+                </button>
               </div>
               {!isCollapsed ? (
-                <div className="mt-1 space-y-1 pl-5">
+                <div className="mt-1 space-y-1">
                   {visibleSessions.map((session) => (
                     <button
                       key={session.id}
                       title={`Last activity: ${subtitle(session)}`}
                       className={cn(
-                        "flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left transition-colors",
+                        "flex h-8 w-full items-center gap-2 rounded-md pl-8 pr-2.5 text-left transition-colors",
                         props.activeSessionID === session.id
                           ? "bg-white"
                           : "hover:bg-white/70",
@@ -197,11 +215,11 @@ export function SessionsPanel(props: {
                     </button>
                   ))}
                   {!props.loading && item.sessions.length === 0 ? (
-                    <div className="px-2.5 py-2 text-xs text-zinc-500">No sessions</div>
+                    <div className="py-2 pl-8 text-xs text-zinc-500">No sessions</div>
                   ) : null}
                   {hasHiddenSessions ? (
                     <button
-                      className="flex h-7 w-full items-center rounded-md px-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
+                      className="flex h-7 w-full items-center rounded-md pl-8 pr-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
                       onClick={() => toggleSessionExpansion(item.project.id)}
                     >
                       {sessionsExpanded ? "折叠显示" : `展开显示 ${item.sessions.length - defaultVisibleSessionCount} 个`}
@@ -213,7 +231,7 @@ export function SessionsPanel(props: {
           )
         })}
         {!props.loading && projects.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-zinc-500">
+          <div className="py-4 text-sm text-zinc-500">
             No sessions yet. Use <MessageSquarePlus className="mx-1 inline size-3.5" /> on a workspace to create one.
           </div>
         ) : null}

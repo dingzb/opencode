@@ -344,10 +344,14 @@ input {
   overflow-wrap: anywhere;
 }
 
-.chat-scrollbar,
-.sidebar-scrollbar {
+.chat-scrollbar {
   scrollbar-color: transparent transparent;
   scrollbar-gutter: stable both-edges;
+}
+
+.sidebar-scrollbar {
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
 }
 
 .chat-scrollbar:hover,

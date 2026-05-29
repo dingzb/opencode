@@ -4,6 +4,7 @@ import {
   BookOpen,
   CircleHelp,
   FolderKanban,
+  Folders,
   Menu,
   MessageCircle,
   MoreHorizontal,
@@ -186,7 +187,6 @@ export function RightInspector(props: { collapsed: boolean; onClose: () => void 
 export function LeftSidebar(props: {
   activePanel: SidebarPanel
   collapsed: boolean
-  onClose: () => void
   onPanelChange: (panel: SidebarPanel) => void
   conversations: ReactNode
 }) {
@@ -201,48 +201,37 @@ export function LeftSidebar(props: {
           "pointer-events-none -translate-x-[calc(100%+0.75rem)] opacity-0 md:w-0 md:translate-x-0 md:border-transparent",
       )}
     >
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <MessageCircle className="size-4 shrink-0 text-zinc-500" />
-          <div className="truncate text-[13px] font-semibold text-zinc-950">
-            {props.activePanel === "conversations" ? "Conversations" : feature?.label}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {props.activePanel !== "conversations" ? (
-            <button
-              className="flex h-7 items-center rounded-md px-2 text-xs text-zinc-500 hover:bg-white/70 hover:text-zinc-950"
-              onClick={() => props.onPanelChange("conversations")}
-            >
-              Sessions
-            </button>
-          ) : null}
-          <button
-            className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950 md:hidden"
-            title="Close sidebar"
-            onClick={props.onClose}
-          >
-            <PanelLeftClose className="size-4" />
-          </button>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1">
-        {props.activePanel === "conversations" ? props.conversations : <FeaturePanel panel={feature} />}
+      <div className="min-h-0 flex-1 flex flex-col">
+        {props.activePanel === "conversations" ? props.conversations : <FeaturePanel panel={feature} onBack={() => props.onPanelChange("conversations")} />}
       </div>
       <SidebarDock activePanel={props.activePanel} onPanelChange={props.onPanelChange} />
     </aside>
   )
 }
 
-function FeaturePanel(props: { panel?: { label: string; icon: typeof MessageCircle } }) {
+function FeaturePanel(props: { panel?: { label: string; icon: typeof MessageCircle }; onBack: () => void }) {
   const Icon = props.panel?.icon ?? MoreHorizontal
   return (
-    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-      <div className="mb-3 flex size-10 items-center justify-center rounded-md bg-white text-zinc-500 ring-1 ring-zinc-200">
-        <Icon className="size-5" />
+    <div className="flex h-full flex-col">
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="size-4 shrink-0 text-zinc-500" />
+          <div className="truncate text-[13px] font-semibold text-zinc-950">{props.panel?.label ?? "More"}</div>
+        </div>
+        <button
+          className="flex h-7 items-center rounded-md px-2 text-xs text-zinc-500 hover:bg-white/70 hover:text-zinc-950"
+          onClick={props.onBack}
+        >
+          Chats
+        </button>
       </div>
-      <div className="text-sm font-semibold text-zinc-900">{props.panel?.label ?? "More"}</div>
-      <div className="mt-1 text-xs leading-5 text-zinc-500">This workspace panel will be filled in a later pass.</div>
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+        <div className="mb-3 flex size-10 items-center justify-center rounded-md bg-white text-zinc-500 ring-1 ring-zinc-200">
+          <Icon className="size-5" />
+        </div>
+        <div className="text-sm font-semibold text-zinc-900">{props.panel?.label ?? "More"}</div>
+        <div className="mt-1 text-xs leading-5 text-zinc-500">This workspace panel will be filled in a later pass.</div>
+      </div>
     </div>
   )
 }
@@ -250,16 +239,16 @@ function FeaturePanel(props: { panel?: { label: string; icon: typeof MessageCirc
 function SidebarDock(props: { activePanel: SidebarPanel; onPanelChange: (panel: SidebarPanel) => void }) {
   return (
     <nav className="flex shrink-0 items-center justify-between border-t border-zinc-200/80 px-2 py-2">
-      <button
-        className={cn(
-          "flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950",
-          props.activePanel === "conversations" && "bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200",
-        )}
-        title="Conversations"
-        onClick={() => props.onPanelChange("conversations")}
-      >
-        <MessageCircle className="size-4" />
-      </button>
+        <button
+          className={cn(
+            "flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950",
+            props.activePanel === "conversations" && "bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200",
+          )}
+          title="Chats"
+          onClick={() => props.onPanelChange("conversations")}
+        >
+          <Folders className="size-4" />
+        </button>
       {sidebarPanels.map((panel) => {
         const Icon = panel.icon
         return (

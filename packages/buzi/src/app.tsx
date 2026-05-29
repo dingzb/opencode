@@ -6,7 +6,7 @@ import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
 import { LeftSidebar, RightInspector, type SidebarPanel, TitleBar } from "./components/app-shell"
-import { SessionsPanel } from "./components/session-list"
+import { ProjectsPanel } from "./components/projects"
 import { DialogSelectProjectDirectory } from "./components/dialog-select-project-directory"
 import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
@@ -161,6 +161,7 @@ export function App() {
   const [stoppingSessionID, setStoppingSessionID] = useState<string>()
   const [projects, setProjects] = useState<BuziProject[]>(readProjects)
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [state, dispatch] = useReducer(chatReducer, {
     sessions: [],
     sessionStatus: {},
@@ -459,12 +460,16 @@ export function App() {
     setSelectedVariant(undefined)
   }, [])
 
-  const createSession = useCallback(async () => {
+  const createSession = useCallback(async (project?: BuziProject) => {
     if (!enabled) return
+    if (project) {
+      setDirectory(project.worktree)
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+    }
     dispatch({ type: "session.active", sessionID: null })
     setSelectedModelValue("")
     setSelectedVariant(undefined)
-  }, [enabled])
+  }, [enabled, queryClient])
 
   const addProject = useCallback(
     async (nextDirectory: string) => {
@@ -559,7 +564,7 @@ export function App() {
 
   const sessionTitle = useCallback(
     (session: { id: string; title?: string; slug?: string }) =>
-      state.temporaryTitles[session.id] ?? session.title ?? session.slug ?? "New session",
+      state.temporaryTitles[session.id] ?? session.title ?? session.slug ?? "New chat",
     [state.temporaryTitles],
   )
   const isSessionBusy = useCallback((sessionID: string) => state.sessionStatus[sessionID]?.type === "busy", [
@@ -568,7 +573,7 @@ export function App() {
   const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
   const connected = health.data?.healthy === true && status === "connected"
   const serverState = health.isError || path.isError ? "error" : connected ? "connected" : "connecting"
-  const title = activeSession ? sessionTitle(activeSession) : "New session"
+  const title = activeSession ? sessionTitle(activeSession) : "New chat"
   const windowTitle = [title, activeDirectory].filter(Boolean).join(" - ") || "Buzi"
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((current) => !current)
@@ -630,10 +635,9 @@ export function App() {
             <LeftSidebar
               activePanel={activeSidebarPanel}
               collapsed={sidebarCollapsed}
-              onClose={() => setSidebarCollapsed(true)}
               onPanelChange={setActiveSidebarPanel}
               conversations={
-                <SessionsPanel
+                <ProjectsPanel
                   projects={projects}
                   sessions={state.sessions}
                   directory={activeDirectory}
@@ -643,6 +647,8 @@ export function App() {
                   onSelect={handleSessionSelect}
                   onNewSession={createSession}
                   onAddProject={() => setProjectDialogOpen(true)}
+                  query={searchQuery}
+                  onSearchChange={setSearchQuery}
                   loading={currentProject.isLoading || sessions.isLoading}
                 />
               }
