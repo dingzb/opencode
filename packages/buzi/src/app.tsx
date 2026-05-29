@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import type { Agent, Model } from "@opencode-ai/sdk/v2/client"
+import type { Agent, Model, Project } from "@opencode-ai/sdk/v2/client"
 import { createOpencodeSdk } from "./lib/opencode"
 import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
 import { LeftSidebar, RightInspector, type SidebarPanel, TitleBar } from "./components/app-shell"
 import { SessionsPanel } from "./components/session-list"
+import { DialogSelectProjectDirectory } from "./components/dialog-select-project-directory"
 import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
 import { AppFrame } from "./shell/app-frame"
 import { setWindowTitle } from "./runtime/window-actions"
+import type { BuziProject } from "./types/project"
 
 const serverUrl = "http://localhost:4096"
 const selectedModelStoragePrefix = "buzi:model-selection:"
 const selectedVariantStoragePrefix = "buzi:model-variant:"
 const selectedVariantDefaultValue = "__default__"
+const projectsStorageKey = "buzi:projects:v1"
 
 type ModelOption = {
   value: string
@@ -33,6 +36,61 @@ function temporaryTitle(text: string) {
   const title = text.replace(/\s+/g, " ").trim()
   if (title.length <= 64) return title
   return `${title.slice(0, 61)}...`
+}
+
+function isStoredProject(value: unknown): value is BuziProject {
+  if (!value || typeof value !== "object") return false
+  const item = value as Partial<BuziProject>
+  return (
+    typeof item.id === "string" &&
+    typeof item.worktree === "string" &&
+    !!item.id &&
+    !!item.worktree &&
+    typeof item.time?.created === "number" &&
+    typeof item.time.updated === "number"
+  )
+}
+
+function readProjects() {
+  try {
+    const value = window.localStorage.getItem(projectsStorageKey)
+    const parsed: unknown = value ? JSON.parse(value) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isStoredProject)
+  } catch {
+    return []
+  }
+}
+
+function writeProjects(projects: BuziProject[]) {
+  window.localStorage.setItem(projectsStorageKey, JSON.stringify(projects))
+}
+
+function projectRecord(project: Project): BuziProject {
+  return {
+    id: project.id,
+    worktree: project.worktree,
+    name: project.name,
+    time: {
+      created: project.time.created,
+      updated: project.time.updated ?? project.time.created,
+    },
+  }
+}
+
+function upsertProject(projects: BuziProject[], project: BuziProject) {
+  const index = projects.findIndex((item) => item.id === project.id || item.worktree === project.worktree)
+  if (index === -1) return [project, ...projects]
+  const next = projects.slice()
+  next[index] = {
+    ...next[index],
+    ...project,
+    time: {
+      created: next[index].time.created,
+      updated: project.time.updated,
+    },
+  }
+  return next
 }
 
 function selectedModelStorageKey(directory: string, sessionID?: string) {
@@ -101,6 +159,8 @@ export function App() {
   const [restoredModelSessions, setRestoredModelSessions] = useState<Set<string>>(() => new Set())
   const [selectedAgent, setSelectedAgent] = useState("")
   const [stoppingSessionID, setStoppingSessionID] = useState<string>()
+  const [projects, setProjects] = useState<BuziProject[]>(readProjects)
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false)
   const [state, dispatch] = useReducer(chatReducer, {
     sessions: [],
     sessionStatus: {},
@@ -110,8 +170,12 @@ export function App() {
   })
 
   const globalSdk = useMemo(() => createOpencodeSdk({ serverUrl }), [])
-  const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory }), [directory])
-  const enabled = Boolean(directory)
+  const activeSession = state.activeSessionID
+    ? state.sessions.find((session) => session.id === state.activeSessionID)
+    : undefined
+  const activeDirectory = activeSession?.directory ?? directory
+  const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory: activeDirectory }), [activeDirectory])
+  const enabled = Boolean(activeDirectory)
 
   const health = useQuery({
     queryKey: ["health"],
@@ -132,19 +196,34 @@ export function App() {
     },
   })
 
-  const sessions = useQuery({
-    queryKey: ["sessions", directory],
-    enabled,
+  const currentProject = useQuery({
+    queryKey: ["current-project", directory],
+    enabled: Boolean(directory),
     queryFn: async () => {
-      const result = await sdk.session.list({ limit: 80 })
-      const next = result.data ?? []
+      const result = await createOpencodeSdk({ serverUrl, directory }).project.current()
+      return result.data
+    },
+  })
+
+  const sessions = useQuery({
+    queryKey: ["sessions", projects.map((project) => `${project.id}:${project.worktree}`).join("|")],
+    enabled: projects.length > 0,
+    queryFn: async () => {
+      const next = (
+        await Promise.all(
+          projects.map(async (project) => {
+            const result = await createOpencodeSdk({ serverUrl, directory: project.worktree }).session.list({ limit: 80 })
+            return result.data ?? []
+          }),
+        )
+      ).flat()
       dispatch({ type: "sessions.loaded", sessions: next })
       return next
     },
   })
 
   const messages = useQuery({
-    queryKey: ["messages", directory, state.activeSessionID],
+    queryKey: ["messages", activeDirectory, state.activeSessionID],
     enabled: enabled && Boolean(state.activeSessionID),
     queryFn: async () => {
       const sessionID = state.activeSessionID!
@@ -156,7 +235,7 @@ export function App() {
   })
 
   useQuery({
-    queryKey: ["session-status", directory],
+    queryKey: ["session-status", activeDirectory],
     enabled,
     queryFn: async () => {
       const result = await sdk.session.status()
@@ -166,7 +245,7 @@ export function App() {
   })
 
   const providers = useQuery({
-    queryKey: ["providers", directory],
+    queryKey: ["providers", activeDirectory],
     enabled,
     queryFn: async () => {
       const result = await sdk.provider.list()
@@ -175,7 +254,7 @@ export function App() {
   })
 
   const agents = useQuery({
-    queryKey: ["agents", directory],
+    queryKey: ["agents", activeDirectory],
     enabled,
     queryFn: async () => {
       const result = await sdk.app.agents()
@@ -224,11 +303,21 @@ export function App() {
 
   useOpencodeEvents({
     sdk: globalSdk,
-    directory: directory ?? "",
+    directory: activeDirectory ?? "",
     dispatch,
     enabled,
     onStatus: setStatus,
   })
+
+  useEffect(() => {
+    writeProjects(projects)
+  }, [projects])
+
+  useEffect(() => {
+    const project = currentProject.data
+    if (!project) return
+    setProjects((current) => upsertProject(current, projectRecord(project)))
+  }, [currentProject.data])
 
   useEffect(() => {
     if (!directory) return
@@ -263,10 +352,10 @@ export function App() {
     }
 
     const sessionID = state.activeSessionID ?? undefined
-    const storedSessionModel = readSelectedModel(directory, sessionID)
-    const storedSessionVariant = readSelectedVariant(directory, sessionID)
-    const storedDraftModel = readSelectedModel(directory)
-    const storedDraftVariant = readSelectedVariant(directory)
+    const storedSessionModel = readSelectedModel(activeDirectory, sessionID)
+    const storedSessionVariant = readSelectedVariant(activeDirectory, sessionID)
+    const storedDraftModel = readSelectedModel(activeDirectory)
+    const storedDraftVariant = readSelectedVariant(activeDirectory)
     const defaults = providers.data?.default ?? {}
     const defaultModel =
       modelOptions.find((option) => defaults[option.providerID] === option.modelID) ??
@@ -278,8 +367,8 @@ export function App() {
       const restoredVariant = sessionModelSelection?.variant
         ? availableVariant(restoredSessionModel, sessionModelSelection.variant)
         : null
-      writeSelectedModel(directory, restoredSessionModel, sessionID)
-      writeSelectedVariant(directory, restoredVariant, sessionID)
+      writeSelectedModel(activeDirectory, restoredSessionModel, sessionID)
+      writeSelectedVariant(activeDirectory, restoredVariant, sessionID)
       setRestoredModelSessions((current) => new Set(current).add(sessionID))
       if (restoredSessionModel !== selectedModelValue) setSelectedModelValue(restoredSessionModel)
       if (restoredVariant !== selectedVariant) setSelectedVariant(restoredVariant)
@@ -298,7 +387,7 @@ export function App() {
     if (nextModelValue !== selectedModelValue) setSelectedModelValue(nextModelValue)
     if (nextVariant !== selectedVariant) setSelectedVariant(nextVariant)
   }, [
-    directory,
+    activeDirectory,
     modelOptions,
     providers.data?.default,
     restoredModelSessions,
@@ -346,22 +435,22 @@ export function App() {
   const handleModelChange = useCallback(
     (value: string) => {
       setSelectedModelValue(value)
-      writeSelectedModel(directory, value, state.activeSessionID ?? undefined)
+      writeSelectedModel(activeDirectory, value, state.activeSessionID ?? undefined)
       const option = modelOptions.find((item) => item.value === value)
       if (selectedVariant && !option?.model.variants?.[selectedVariant]) {
         setSelectedVariant(undefined)
-        writeSelectedVariant(directory, undefined, state.activeSessionID ?? undefined)
+        writeSelectedVariant(activeDirectory, undefined, state.activeSessionID ?? undefined)
       }
     },
-    [directory, modelOptions, selectedVariant, state.activeSessionID],
+    [activeDirectory, modelOptions, selectedVariant, state.activeSessionID],
   )
 
   const handleVariantChange = useCallback(
     (value: string | null | undefined) => {
       setSelectedVariant(value)
-      writeSelectedVariant(directory, value, state.activeSessionID ?? undefined)
+      writeSelectedVariant(activeDirectory, value, state.activeSessionID ?? undefined)
     },
-    [directory, state.activeSessionID],
+    [activeDirectory, state.activeSessionID],
   )
 
   const handleSessionSelect = useCallback((sessionID: string) => {
@@ -377,6 +466,20 @@ export function App() {
     setSelectedVariant(undefined)
   }, [enabled])
 
+  const addProject = useCallback(
+    async (nextDirectory: string) => {
+      const result = await createOpencodeSdk({ serverUrl, directory: nextDirectory }).project.current()
+      const project = result.data
+      if (!project) return
+      setProjects((current) => upsertProject(current, projectRecord(project)))
+      setDirectory(project.worktree)
+      dispatch({ type: "session.active", sessionID: undefined })
+      setProjectDialogOpen(false)
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+    },
+    [queryClient],
+  )
+
   const submit = useCallback(
     async (text: string) => {
       if (!enabled) return
@@ -386,8 +489,8 @@ export function App() {
       if (newSession?.data) dispatch({ type: "session.upsert", session: newSession.data })
       if (newSession?.data) dispatch({ type: "session.temporaryTitle", sessionID, title: temporaryTitle(text) })
       dispatch({ type: "session.active", sessionID })
-      writeSelectedModel(directory, selectedModelValue, sessionID)
-      writeSelectedVariant(directory, selectedVariant, sessionID)
+      writeSelectedModel(activeDirectory, selectedModelValue, sessionID)
+      writeSelectedVariant(activeDirectory, selectedVariant, sessionID)
       const model = selectedModel ? { providerID: selectedModel.providerID, modelID: selectedModel.modelID } : undefined
       const agent = selectedAgent || "build"
 
@@ -427,7 +530,7 @@ export function App() {
         })
     },
     [
-      directory,
+      activeDirectory,
       enabled,
       sdk,
       selectedAgent,
@@ -454,9 +557,6 @@ export function App() {
       })
   }, [sdk, state.activeSessionID])
 
-  const activeSession = state.activeSessionID
-    ? state.sessions.find((session) => session.id === state.activeSessionID)
-    : undefined
   const sessionTitle = useCallback(
     (session: { id: string; title?: string; slug?: string }) =>
       state.temporaryTitles[session.id] ?? session.title ?? session.slug ?? "New session",
@@ -469,7 +569,7 @@ export function App() {
   const connected = health.data?.healthy === true && status === "connected"
   const serverState = health.isError || path.isError ? "error" : connected ? "connected" : "connecting"
   const title = activeSession ? sessionTitle(activeSession) : "New session"
-  const windowTitle = [title, directory].filter(Boolean).join(" - ") || "Buzi"
+  const windowTitle = [title, activeDirectory].filter(Boolean).join(" - ") || "Buzi"
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((current) => !current)
     if (!isFixedSidebar) setInspectorCollapsed(true)
@@ -483,11 +583,11 @@ export function App() {
     document.title = windowTitle
     void setWindowTitle(windowTitle)
     window.webkit?.messageHandlers?.buziHeader?.postMessage({
-      projectPath: directory ?? "No project selected",
+      projectPath: activeDirectory ?? "No project selected",
       title,
       serverState,
     })
-  }, [directory, serverState, title, windowTitle])
+  }, [activeDirectory, serverState, title, windowTitle])
 
   useEffect(() => {
     window.addEventListener("buzi:toggle-sidebar", toggleSidebar)
@@ -501,24 +601,25 @@ export function App() {
   return (
     <AppFrame>
       {(frameSlots) => (
-        <main className="flex h-full min-h-0 flex-col">
-          {!import.meta.env.VITE_BUZI_NATIVE_HEADERBAR ? (
-            <TitleBar
-              projectPath={directory ?? ""}
-              title={title}
-              serverState={serverState}
-              sidebarCollapsed={sidebarCollapsed}
-              inspectorCollapsed={inspectorCollapsed}
-              frameLeading={frameSlots.leading}
-              frameTrailing={frameSlots.trailing}
-              className={frameSlots.titleBarClassName}
-              dragRegion={frameSlots.dragRegion}
-              nativeTitleBar={frameSlots.nativeTitleBar}
-              onToggleSidebar={toggleSidebar}
-              onToggleInspector={toggleInspector}
-            />
-          ) : null}
-          <div className="flex min-h-0 flex-1">
+        <>
+          <main className="flex h-full min-h-0 flex-col">
+            {!import.meta.env.VITE_BUZI_NATIVE_HEADERBAR ? (
+              <TitleBar
+                projectPath={activeDirectory ?? ""}
+                title={title}
+                serverState={serverState}
+                sidebarCollapsed={sidebarCollapsed}
+                inspectorCollapsed={inspectorCollapsed}
+                frameLeading={frameSlots.leading}
+                frameTrailing={frameSlots.trailing}
+                className={frameSlots.titleBarClassName}
+                dragRegion={frameSlots.dragRegion}
+                nativeTitleBar={frameSlots.nativeTitleBar}
+                onToggleSidebar={toggleSidebar}
+                onToggleInspector={toggleInspector}
+              />
+            ) : null}
+            <div className="flex min-h-0 flex-1">
             {!sidebarCollapsed && !isFixedSidebar ? (
               <button
                 className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
@@ -533,14 +634,16 @@ export function App() {
               onPanelChange={setActiveSidebarPanel}
               conversations={
                 <SessionsPanel
+                  projects={projects}
                   sessions={state.sessions}
-                  directory={directory}
+                  directory={activeDirectory}
                   activeSessionID={state.activeSessionID ?? undefined}
                   titleForSession={sessionTitle}
                   isSessionBusy={isSessionBusy}
                   onSelect={handleSessionSelect}
                   onNewSession={createSession}
-                  loading={sessions.isLoading}
+                  onAddProject={() => setProjectDialogOpen(true)}
+                  loading={currentProject.isLoading || sessions.isLoading}
                 />
               }
             />
@@ -582,8 +685,16 @@ export function App() {
               />
             ) : null}
             <RightInspector collapsed={inspectorCollapsed} onClose={() => setInspectorCollapsed(true)} />
-          </div>
-        </main>
+            </div>
+          </main>
+          <DialogSelectProjectDirectory
+            open={projectDialogOpen}
+            sdk={globalSdk}
+            projects={projects}
+            onClose={() => setProjectDialogOpen(false)}
+            onSelect={addProject}
+          />
+        </>
       )}
     </AppFrame>
   )

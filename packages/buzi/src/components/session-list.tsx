@@ -1,6 +1,7 @@
-import { LoaderCircle, MessageSquarePlus, Search } from "lucide-react"
+import { ChevronDown, ChevronRight, Folder, FolderPlus, LoaderCircle, MessageSquarePlus, Search } from "lucide-react"
 import { useMemo, useState } from "react"
 import type { Session } from "@opencode-ai/sdk/v2/client"
+import type { BuziProject } from "../types/project"
 import { cn } from "../lib/utils"
 
 const defaultVisibleSessionCount = 5
@@ -38,66 +39,69 @@ function relativeTime(value: number) {
   return `${Math.floor(seconds / year)}y`
 }
 
-type SessionGroup = {
-  id: string
-  name: string
-  sessions: Session[]
+function basename(value: string) {
+  return value.replace(/[/\\]+$/, "").split(/[/\\]/).filter(Boolean).at(-1) || value
 }
 
-function startOfDay(value: number) {
-  const date = new Date(value)
-  date.setHours(0, 0, 0, 0)
-  return date.getTime()
+function projectTitle(project: BuziProject) {
+  return project.name || basename(project.worktree)
 }
 
-function timeGroups(sessions: Session[]) {
-  const now = startOfDay(Date.now())
-  const day = 24 * 60 * 60 * 1000
-  const groups: SessionGroup[] = [
-    { id: "today", name: "Today", sessions: [] },
-    { id: "yesterday", name: "Yesterday", sessions: [] },
-    { id: "previous-7-days", name: "Previous 7 Days", sessions: [] },
-    { id: "earlier", name: "Earlier", sessions: [] },
-  ]
+function sortSessions(sessions: Session[]) {
+  return sessions
+    .filter((session) => !session.parentID && !session.time.archived)
+    .slice()
+    .sort((a, b) => sessionTime(b) - sessionTime(a))
+}
 
-  for (const session of sessions) {
-    const age = now - startOfDay(sessionTime(session))
-    const group =
-      age < day ? groups[0] : age < day * 2 ? groups[1] : age < day * 8 ? groups[2] : groups[3]
-    group.sessions.push(session)
-  }
-
-  return groups.filter((group) => group.sessions.length > 0)
+function projectSessions(project: BuziProject, sessions: Session[]) {
+  return sortSessions(
+    sessions.filter(
+      (session) =>
+        session.projectID === project.id ||
+        session.directory === project.worktree,
+    ),
+  )
 }
 
 export function SessionsPanel(props: {
+  projects: BuziProject[]
   sessions: Session[]
   directory?: string
   activeSessionID?: string
   titleForSession?: (session: Session) => string
   isSessionBusy?: (sessionID: string) => boolean
   onSelect: (sessionID: string) => void
-  onNewSession: (projectID?: string) => void
+  onNewSession: () => void
+  onAddProject: () => void
   loading: boolean
 }) {
   const [query, setQuery] = useState("")
-  const filteredSessions = useMemo(() => {
+  const projects = useMemo(() => {
     const term = query.trim().toLocaleLowerCase()
-    if (!term) return props.sessions
-    return props.sessions.filter((session) => {
-      const label = props.titleForSession?.(session) ?? title(session)
-      return label.toLocaleLowerCase().includes(term)
-    })
-  }, [props.sessions, props.titleForSession, query])
-  const groups = useMemo(() => timeGroups(filteredSessions), [filteredSessions])
+    return props.projects
+      .map((project) => {
+        const sessions = projectSessions(project, props.sessions)
+        const label = projectTitle(project)
+        const matchesProject = !term || label.toLocaleLowerCase().includes(term) || project.worktree.toLocaleLowerCase().includes(term)
+        const matchingSessions = term
+          ? sessions.filter((session) =>
+              (props.titleForSession?.(session) ?? title(session)).toLocaleLowerCase().includes(term),
+            )
+          : sessions
+        return { project, sessions: matchesProject ? sessions : matchingSessions }
+      })
+      .filter((item) => item.sessions.length > 0 || !term)
+      .sort((a, b) => {
+        const newestA = a.sessions[0] ? sessionTime(a.sessions[0]) : a.project.time.updated ?? a.project.time.created
+        const newestB = b.sessions[0] ? sessionTime(b.sessions[0]) : b.project.time.updated ?? b.project.time.created
+        return newestB - newestA
+      })
+  }, [props.projects, props.sessions, props.titleForSession, query])
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(() => new Set())
 
-  function groupKey(group: SessionGroup) {
-    return group.id
-  }
-
-  function toggleGroup(key: string) {
+  function toggleProject(key: string) {
     setCollapsed((current) => {
       const next = new Set(current)
       if (next.has(key)) next.delete(key)
@@ -127,38 +131,49 @@ export function SessionsPanel(props: {
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <button
-          className="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-zinc-600 transition-colors hover:bg-white/70 hover:text-zinc-950"
-          onClick={() => props.onNewSession()}
-        >
-          <MessageSquarePlus className="size-4" />
-          New Session
-        </button>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            className="flex h-8 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-white/70 hover:text-zinc-950"
+            onClick={() => props.onNewSession()}
+          >
+            <MessageSquarePlus className="size-4 shrink-0" />
+            <span className="truncate">New Session</span>
+          </button>
+          <button
+            className="flex h-8 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-white/70 hover:text-zinc-950"
+            onClick={props.onAddProject}
+          >
+            <FolderPlus className="size-4 shrink-0" />
+            <span className="truncate">Add Project</span>
+          </button>
+        </div>
       </div>
       <div className="sidebar-scrollbar min-h-0 flex-1 overflow-y-auto px-1 py-2">
-        {props.loading ? <div className="px-3 py-4 text-sm text-zinc-500">Loading sessions...</div> : null}
-        {groups.map((group) => {
-          const key = groupKey(group)
-          const isCollapsed = collapsed.has(key)
-          const sessionsExpanded = expandedSessions.has(key)
+        {props.loading ? <div className="px-3 py-4 text-sm text-zinc-500">Loading projects...</div> : null}
+        {projects.map((item) => {
+          const isCollapsed = collapsed.has(item.project.id)
+          const sessionsExpanded = expandedSessions.has(item.project.id)
           const visibleSessions = sessionsExpanded
-            ? group.sessions
-            : group.sessions.slice(0, defaultVisibleSessionCount)
-          const hasHiddenSessions = group.sessions.length > defaultVisibleSessionCount
+            ? item.sessions
+            : item.sessions.slice(0, defaultVisibleSessionCount)
+          const hasHiddenSessions = item.sessions.length > defaultVisibleSessionCount
           return (
-            <div key={key} className="mb-2">
-              <div className="group flex h-8 items-center gap-1 px-2 text-zinc-700">
+            <div key={item.project.id} className="mb-2">
+              <div className="group flex h-8 items-center gap-1 px-1 text-zinc-700">
                 <button
-                  className="flex h-7 min-w-0 flex-1 items-center rounded px-1 text-left"
-                  onClick={() => toggleGroup(key)}
+                  className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 text-left transition-colors hover:bg-white/70"
+                  onClick={() => toggleProject(item.project.id)}
                 >
-                  <span className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                    {group.name}
+                  {isCollapsed ? <ChevronRight className="size-3.5 shrink-0" /> : <ChevronDown className="size-3.5 shrink-0" />}
+                  <Folder className="size-3.5 shrink-0 text-zinc-500" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-zinc-900">
+                    {projectTitle(item.project)}
                   </span>
+                  <span className="shrink-0 text-[11px] text-zinc-500">{item.sessions.length}</span>
                 </button>
               </div>
               {!isCollapsed ? (
-                <div className="mt-1 space-y-1">
+                <div className="mt-1 space-y-1 pl-5">
                   {visibleSessions.map((session) => (
                     <button
                       key={session.id}
@@ -181,15 +196,15 @@ export function SessionsPanel(props: {
                       )}
                     </button>
                   ))}
-                  {!props.loading && group.sessions.length === 0 ? (
+                  {!props.loading && item.sessions.length === 0 ? (
                     <div className="px-2.5 py-2 text-xs text-zinc-500">No sessions</div>
                   ) : null}
                   {hasHiddenSessions ? (
                     <button
                       className="flex h-7 w-full items-center rounded-md px-2.5 text-left text-xs text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800"
-                      onClick={() => toggleSessionExpansion(key)}
+                      onClick={() => toggleSessionExpansion(item.project.id)}
                     >
-                      {sessionsExpanded ? "折叠显示" : `展开显示 ${group.sessions.length - defaultVisibleSessionCount} 个`}
+                      {sessionsExpanded ? "折叠显示" : `展开显示 ${item.sessions.length - defaultVisibleSessionCount} 个`}
                     </button>
                   ) : null}
                 </div>
@@ -197,7 +212,7 @@ export function SessionsPanel(props: {
             </div>
           )
         })}
-        {!props.loading && groups.every((group) => group.sessions.length === 0) ? (
+        {!props.loading && projects.length === 0 ? (
           <div className="px-3 py-4 text-sm text-zinc-500">
             No sessions yet. Use <MessageSquarePlus className="mx-1 inline size-3.5" /> on a workspace to create one.
           </div>
