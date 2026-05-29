@@ -1,8 +1,7 @@
-import { useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
+import { useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
 import {
   Blocks,
   BookOpen,
-  ChevronDown,
   CircleHelp,
   FolderKanban,
   Menu,
@@ -40,11 +39,10 @@ export function TitleBar(props: {
   frameTrailing?: ReactNode
   className?: string
   dragRegion?: boolean
+  nativeTitleBar?: boolean
   onToggleSidebar: () => void
-  onNewProject: () => void
   onToggleInspector: () => void
 }) {
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const suppressNextTitleBarClick = useRef(false)
 
   const handleTitleBarMouseDown = (event: ReactMouseEvent<HTMLElement>) => {
@@ -89,7 +87,8 @@ export function TitleBar(props: {
   return (
     <header
       className={cn(
-        "grid h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center border-b border-zinc-200/80 bg-[#f7f7f5] px-2 sm:px-3 lg:grid-cols-[1fr_auto_1fr]",
+        "grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center border-b border-zinc-200/80 bg-[#f7f7f5] px-2 sm:px-3 lg:grid-cols-[1fr_auto_1fr]",
+        props.nativeTitleBar ? "h-10" : "h-12",
         props.className,
       )}
       onMouseDown={handleTitleBarMouseDown}
@@ -106,40 +105,15 @@ export function TitleBar(props: {
           {props.sidebarCollapsed ? <PanelLeft className="size-4" /> : <PanelLeftClose className="size-4" />}
         </button>
       </div>
-      <div className="relative flex min-w-0 justify-center">
-        <button
-          className="group flex min-w-0 max-w-[160px] items-center gap-1 rounded-md px-2 py-1 text-center hover:bg-zinc-100 min-[420px]:max-w-[220px] sm:max-w-[360px] sm:gap-2 sm:px-3 lg:max-w-[520px]"
-          onClick={() => setProjectMenuOpen((current) => !current)}
-        >
-          <div className="min-w-0">
+      <div className="flex min-w-0 justify-center">
+        {!props.nativeTitleBar ? (
+          <div className="min-w-0 max-w-[160px] cursor-default px-2 py-1 text-center min-[420px]:max-w-[220px] sm:max-w-[360px] sm:px-3 lg:max-w-[520px]">
             <div className="truncate text-[11px] font-semibold leading-4 text-zinc-950 min-[420px]:text-[12px] sm:text-[13px]">
               {props.projectPath || "No project selected"}
             </div>
-            <div className="truncate text-[10px] font-medium leading-4 text-zinc-500 sm:text-[11px]">{props.title}</div>
-          </div>
-          <ChevronDown className="size-3.5 shrink-0 text-zinc-400 group-hover:text-zinc-600" />
-        </button>
-        {projectMenuOpen ? (
-          <div
-            className="absolute top-11 z-20 w-[min(360px,calc(100vw-24px))] rounded-md border border-zinc-200 bg-white p-1 shadow-lg"
-            data-no-window-drag
-          >
-            <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400">
-              Projects
+            <div className="truncate text-[10px] font-medium leading-4 text-zinc-500 sm:text-[11px]">
+              {props.title}
             </div>
-            <button className="flex h-8 w-full items-center rounded px-2 text-left text-xs text-zinc-800 hover:bg-zinc-100">
-              <span className="truncate">{props.projectPath || "No project selected"}</span>
-            </button>
-            <div className="my-1 border-t border-zinc-100" />
-            <button className="flex h-8 w-full items-center rounded px-2 text-left text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">
-              Show all projects
-            </button>
-            <button
-              className="flex h-8 w-full items-center rounded px-2 text-left text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
-              onClick={props.onNewProject}
-            >
-              Add new project
-            </button>
           </div>
         ) : null}
       </div>

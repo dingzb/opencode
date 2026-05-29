@@ -6,12 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 4455",
+    "dev:linux": "VITE_BUZI_NATIVE_HEADERBAR=1 vite --host 0.0.0.0 --port 4455",
     "build": "tsc -b && vite build",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:build:linux": "tauri build --bundles deb,rpm,appimage",
     "desktop:build:mac": "tauri build --bundles dmg,app",
     "desktop:build:win": "tauri build --bundles nsis,msi",
+    "gtk:check": "cargo check --manifest-path src-gtk/Cargo.toml",
+    "gtk:dev": "bun run src-gtk/scripts/dev.ts",
+    "gtk:run": "cargo run --manifest-path src-gtk/Cargo.toml",
     "typecheck": "tsc -b"
   },
   "dependencies": {

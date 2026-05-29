@@ -10,6 +10,7 @@ import { SessionsPanel } from "./components/session-list"
 import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
 import { AppFrame } from "./shell/app-frame"
+import { setWindowTitle } from "./runtime/window-actions"
 
 const serverUrl = "http://localhost:4096"
 const selectedModelStoragePrefix = "buzi:model-selection:"
@@ -369,10 +370,6 @@ export function App() {
     setSelectedVariant(undefined)
   }, [])
 
-  const openProject = useCallback(() => {
-    window.alert("Project picker is not implemented yet.")
-  }, [])
-
   const createSession = useCallback(async () => {
     if (!enabled) return
     dispatch({ type: "session.active", sessionID: null })
@@ -471,31 +468,56 @@ export function App() {
   const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
   const connected = health.data?.healthy === true && status === "connected"
   const serverState = health.isError || path.isError ? "error" : connected ? "connected" : "connecting"
+  const title = activeSession ? sessionTitle(activeSession) : "New session"
+  const windowTitle = [title, directory].filter(Boolean).join(" - ") || "Buzi"
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((current) => !current)
+    if (!isFixedSidebar) setInspectorCollapsed(true)
+  }, [isFixedSidebar])
+  const toggleInspector = useCallback(() => {
+    setInspectorCollapsed((current) => !current)
+    if (!isFixedInspector) setSidebarCollapsed(true)
+  }, [isFixedInspector])
+
+  useEffect(() => {
+    document.title = windowTitle
+    void setWindowTitle(windowTitle)
+    window.webkit?.messageHandlers?.buziHeader?.postMessage({
+      projectPath: directory ?? "No project selected",
+      title,
+      serverState,
+    })
+  }, [directory, serverState, title, windowTitle])
+
+  useEffect(() => {
+    window.addEventListener("buzi:toggle-sidebar", toggleSidebar)
+    window.addEventListener("buzi:toggle-inspector", toggleInspector)
+    return () => {
+      window.removeEventListener("buzi:toggle-sidebar", toggleSidebar)
+      window.removeEventListener("buzi:toggle-inspector", toggleInspector)
+    }
+  }, [toggleInspector, toggleSidebar])
 
   return (
     <AppFrame>
       {(frameSlots) => (
         <main className="flex h-full min-h-0 flex-col">
-          <TitleBar
-            projectPath={directory ?? ""}
-            title={activeSession ? sessionTitle(activeSession) : "New session"}
-            serverState={serverState}
-            sidebarCollapsed={sidebarCollapsed}
-            inspectorCollapsed={inspectorCollapsed}
-            frameLeading={frameSlots.leading}
-            frameTrailing={frameSlots.trailing}
-            className={frameSlots.titleBarClassName}
-            dragRegion={frameSlots.dragRegion}
-            onToggleSidebar={() => {
-              setSidebarCollapsed((current) => !current)
-              if (!isFixedSidebar) setInspectorCollapsed(true)
-            }}
-            onNewProject={openProject}
-            onToggleInspector={() => {
-              setInspectorCollapsed((current) => !current)
-              if (!isFixedInspector) setSidebarCollapsed(true)
-            }}
-          />
+          {!import.meta.env.VITE_BUZI_NATIVE_HEADERBAR ? (
+            <TitleBar
+              projectPath={directory ?? ""}
+              title={title}
+              serverState={serverState}
+              sidebarCollapsed={sidebarCollapsed}
+              inspectorCollapsed={inspectorCollapsed}
+              frameLeading={frameSlots.leading}
+              frameTrailing={frameSlots.trailing}
+              className={frameSlots.titleBarClassName}
+              dragRegion={frameSlots.dragRegion}
+              nativeTitleBar={frameSlots.nativeTitleBar}
+              onToggleSidebar={toggleSidebar}
+              onToggleInspector={toggleInspector}
+            />
+          ) : null}
           <div className="flex min-h-0 flex-1">
             {!sidebarCollapsed && !isFixedSidebar ? (
               <button

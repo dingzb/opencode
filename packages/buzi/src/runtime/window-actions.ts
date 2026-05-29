@@ -21,3 +21,7 @@ export async function startWindowDrag() {
 export async function closeWindow() {
   await currentWindow().then((window) => window?.close())
 }
+
+export async function setWindowTitle(title: string) {
+  await currentWindow().then((window) => window?.setTitle(title))
+}

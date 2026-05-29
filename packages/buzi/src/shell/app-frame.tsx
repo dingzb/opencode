@@ -7,6 +7,7 @@ export type TitleBarFrameSlots = {
   trailing?: ReactNode
   titleBarClassName?: string
   dragRegion?: boolean
+  nativeTitleBar?: boolean
 }
 
 export function AppFrame(props: { children: (slots: TitleBarFrameSlots) => ReactNode }) {
@@ -20,9 +21,10 @@ export function AppFrame(props: { children: (slots: TitleBarFrameSlots) => React
     <DesktopFrame>
       {props.children({
         leading: platform.os === "darwin" ? <WindowControls os={platform.os} /> : undefined,
-        trailing: platform.os !== "darwin" ? <WindowControls os={platform.os} /> : undefined,
-        titleBarClassName: "desktop-titlebar",
-        dragRegion: true,
+        trailing: platform.os === "win32" ? <WindowControls os={platform.os} /> : undefined,
+        titleBarClassName: platform.os === "linux" ? undefined : "desktop-titlebar",
+        dragRegion: platform.os !== "linux",
+        nativeTitleBar: platform.os === "linux",
       })}
     </DesktopFrame>
   )
