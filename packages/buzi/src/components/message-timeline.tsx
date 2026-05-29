@@ -121,7 +121,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
       onTouchStart={markUserScroll}
       onWheel={markUserScroll}
     >
-      <div ref={contentRef} className="mx-auto flex max-w-4xl flex-col gap-7">
+      <div ref={contentRef} className="mx-auto flex max-w-[800px] flex-col gap-7">
         {props.messages.map((message) => {
           return <MessageItem key={message.id} message={message} parts={props.parts[message.id] ?? emptyParts} />
         })}

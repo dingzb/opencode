@@ -150,10 +150,9 @@ export function App() {
   const [directory, setDirectory] = useState<string>()
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("conversations")
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
-  const isFixedSidebar = useMediaQuery("(min-width: 768px)")
-  const isFixedInspector = useMediaQuery("(min-width: 1280px)")
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 1104)
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(window.innerWidth < 1408)
+  const isOverlayMode = useMediaQuery("(max-width: 1103px)")
   const [selectedModelValue, setSelectedModelValue] = useState("")
   const [selectedVariant, setSelectedVariant] = useState<string | null | undefined>()
   const [restoredModelSessions, setRestoredModelSessions] = useState<Set<string>>(() => new Set())
@@ -328,14 +327,6 @@ export function App() {
     setSelectedAgent("")
     setRestoredModelSessions(new Set())
   }, [directory])
-
-  useEffect(() => {
-    setSidebarCollapsed(!isFixedSidebar)
-  }, [isFixedSidebar])
-
-  useEffect(() => {
-    setInspectorCollapsed(!isFixedInspector)
-  }, [isFixedInspector])
 
   useEffect(() => {
     if (modelOptions.length === 0) return
@@ -576,13 +567,17 @@ export function App() {
   const title = activeSession ? sessionTitle(activeSession) : "New chat"
   const windowTitle = [title, activeDirectory].filter(Boolean).join(" - ") || "Buzi"
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((current) => !current)
-    if (!isFixedSidebar) setInspectorCollapsed(true)
-  }, [isFixedSidebar])
+    setSidebarCollapsed((prev) => {
+      if (prev && isOverlayMode) setInspectorCollapsed(true)
+      return !prev
+    })
+  }, [isOverlayMode])
   const toggleInspector = useCallback(() => {
-    setInspectorCollapsed((current) => !current)
-    if (!isFixedInspector) setSidebarCollapsed(true)
-  }, [isFixedInspector])
+    setInspectorCollapsed((prev) => {
+      if (prev && isOverlayMode) setSidebarCollapsed(true)
+      return !prev
+    })
+  }, [isOverlayMode])
 
   useEffect(() => {
     document.title = windowTitle
@@ -625,9 +620,9 @@ export function App() {
               />
             ) : null}
             <div className="flex min-h-0 flex-1">
-            {!sidebarCollapsed && !isFixedSidebar ? (
+            {!sidebarCollapsed && isOverlayMode ? (
               <button
-                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
+                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px]"
                 aria-label="Close sidebar overlay"
                 onClick={() => setSidebarCollapsed(true)}
               />
@@ -683,9 +678,9 @@ export function App() {
                 onStop={stop}
               />
             </section>
-            {!inspectorCollapsed && !isFixedInspector ? (
+{!inspectorCollapsed && isOverlayMode ? (
               <button
-                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] xl:hidden"
+                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px]"
                 aria-label="Close inspector overlay"
                 onClick={() => setInspectorCollapsed(true)}
               />

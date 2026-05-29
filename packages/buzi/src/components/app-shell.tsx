@@ -167,15 +167,15 @@ export function RightInspector(props: { collapsed: boolean; onClose: () => void 
     <aside
       aria-hidden={props.collapsed}
       className={cn(
-        "fixed bottom-3 right-3 top-[3.75rem] z-30 flex w-[min(360px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden rounded-l-xl rounded-r-md border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out xl:static xl:h-full xl:w-[304px] xl:rounded-none xl:border-y-0 xl:border-r-0 xl:shadow-none",
+        "fixed bottom-0 right-0 top-12 z-30 flex w-[min(360px,calc(100vw-0.5rem))] shrink-0 flex-col overflow-hidden rounded-l-xl border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out min-[1104px]:static min-[1104px]:h-full min-[1104px]:w-[304px] min-[1104px]:rounded-none min-[1104px]:border-y-0 min-[1104px]:border-r-0 min-[1104px]:shadow-none min-[1104px]:border-l min-[1104px]:border-zinc-200/80",
         props.collapsed &&
-          "pointer-events-none translate-x-[calc(100%+0.75rem)] opacity-0 xl:w-0 xl:translate-x-0 xl:border-transparent",
+          "pointer-events-none translate-x-full opacity-0 min-[1104px]:w-0 min-[1104px]:translate-x-0 min-[1104px]:border-transparent min-[1104px]:opacity-100 min-[1104px]:pointer-events-auto min-[1104px]:overflow-hidden",
       )}
     >
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 px-3">
         <div className="truncate text-[13px] font-semibold text-zinc-950">Inspector</div>
         <button
-          className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950 xl:hidden"
+          className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950 min-[1104px]:hidden"
           title="Close inspector"
           onClick={props.onClose}
         >
@@ -204,9 +204,9 @@ export function LeftSidebar(props: {
     <aside
       aria-hidden={props.collapsed}
       className={cn(
-        "fixed bottom-3 left-3 top-[3.75rem] z-30 flex w-[min(340px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden rounded-l-md rounded-r-xl border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out md:static md:h-full md:w-[304px] md:rounded-none md:border-y-0 md:border-l-0 md:shadow-none",
+        "fixed bottom-0 left-0 top-12 z-30 flex w-[min(340px,calc(100vw-0.5rem))] shrink-0 flex-col overflow-hidden rounded-r-xl border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out min-[1104px]:static min-[1104px]:h-full min-[1104px]:w-[304px] min-[1104px]:rounded-none min-[1104px]:border-y-0 min-[1104px]:border-l-0 min-[1104px]:shadow-none",
         props.collapsed &&
-          "pointer-events-none -translate-x-[calc(100%+0.75rem)] opacity-0 md:w-0 md:translate-x-0 md:border-transparent",
+          "pointer-events-none -translate-x-full opacity-0 min-[1104px]:w-0 min-[1104px]:translate-x-0 min-[1104px]:border-transparent",
       )}
     >
       <div className="min-h-0 flex-1 flex flex-col">

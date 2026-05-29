@@ -290,7 +290,7 @@ export function Composer(props: ComposerProps) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-10 sm:px-[calc(1.75rem+var(--chat-scrollbar-width)-2px)] sm:pb-5">
-      <div className="pointer-events-auto mx-auto flex w-full max-w-4xl flex-col gap-2 rounded-[20px] border border-zinc-200/80 bg-[#fbfbfa] p-2.5 shadow-lg shadow-zinc-950/10 sm:rounded-[24px] sm:p-3">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[20px] border border-zinc-200/80 bg-[#fbfbfa] p-2.5 shadow-lg shadow-zinc-950/10 sm:rounded-[24px] sm:p-3">
         <textarea
           ref={textareaRef}
           className="composer-textarea resize-none overflow-hidden bg-transparent px-2 py-0.5 text-zinc-900 outline-none placeholder:text-zinc-400"
