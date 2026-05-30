@@ -1,6 +1,7 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react"
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
 import { Bot } from "lucide-react"
+import { Virtualizer, type VirtualizerHandle } from "virtua"
 import { Markdown } from "./markdown"
 import { ProcessPart } from "./process-part"
 import { cn } from "../lib/utils"
@@ -41,10 +42,14 @@ const MessageItem = memo(function MessageItem(props: { message: Message; parts: 
 
 export function MessageTimeline(props: { messages: Message[]; parts: Record<string, Part[]>; loading: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
+  const virtualizerRef = useRef<VirtualizerHandle>(null)
   const stickToBottomRef = useRef(true)
   const scrollFrameRef = useRef<number | undefined>(undefined)
   const userScrollAtRef = useRef(0)
+  const keepMounted = useMemo(() => {
+    if (props.messages.length === 0) return []
+    return [props.messages.length - 1]
+  }, [props.messages.length])
 
   const isAtBottom = useCallback((element: HTMLDivElement) => {
     return element.scrollHeight - element.scrollTop - element.clientHeight < 24
@@ -56,9 +61,11 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
       scrollFrameRef.current = undefined
       const element = scrollRef.current
       if (!element || !stickToBottomRef.current) return
+      if (props.messages.length === 0) return
+      virtualizerRef.current?.scrollToIndex(props.messages.length - 1, { align: "end" })
       element.scrollTop = element.scrollHeight
     })
-  }, [])
+  }, [props.messages.length])
 
   const markUserScroll = useCallback(() => {
     userScrollAtRef.current = Date.now()
@@ -70,13 +77,13 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
   }, [props.messages, props.parts, scrollToBottom])
 
   useLayoutEffect(() => {
-    const content = contentRef.current
-    if (!content) return
+    const element = scrollRef.current
+    if (!element) return
 
     const observer = new ResizeObserver(() => {
       if (stickToBottomRef.current) scrollToBottom()
     })
-    observer.observe(content)
+    observer.observe(element)
     return () => observer.disconnect()
   }, [scrollToBottom])
 
@@ -121,11 +128,19 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
       onTouchStart={markUserScroll}
       onWheel={markUserScroll}
     >
-      <div ref={contentRef} className="mx-auto flex max-w-[800px] flex-col gap-7">
-        {props.messages.map((message) => {
-          return <MessageItem key={message.id} message={message} parts={props.parts[message.id] ?? emptyParts} />
-        })}
-      </div>
+      <Virtualizer
+        data={props.messages}
+        itemSize={96}
+        keepMounted={keepMounted}
+        ref={virtualizerRef}
+        scrollRef={scrollRef}
+      >
+        {(message) => (
+          <div className="mx-auto max-w-[800px] pb-7">
+            <MessageItem message={message} parts={props.parts[message.id] ?? emptyParts} />
+          </div>
+        )}
+      </Virtualizer>
     </div>
   )
 }
