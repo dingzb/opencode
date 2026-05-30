@@ -156,12 +156,16 @@ input {
 
 .markdown [data-streamdown="code-block"] {
   position: relative;
+  display: block;
   gap: 0;
   margin: 0.85rem 0;
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
   padding: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .markdown [data-streamdown="code-block-header"] {
@@ -215,8 +219,12 @@ input {
 }
 
 .markdown [data-streamdown="code-block-body"] {
-  contain: layout paint;
+  contain: none;
+  display: block;
+  height: auto;
+  max-height: none;
   min-height: 2.75rem;
+  overflow-y: visible;
   border: 0;
   border-radius: 0 0 0.5rem 0.5rem;
   background: #f1f1ef;
@@ -227,7 +235,11 @@ input {
 }
 
 .markdown [data-streamdown="code-block-body"] pre {
+  display: block;
+  height: auto;
+  max-height: none;
   margin: 0;
+  overflow-y: visible;
   border: 0;
   border-radius: 0;
   background: transparent !important;
@@ -236,6 +248,9 @@ input {
 }
 
 .markdown [data-streamdown="code-block-body"] code {
+  display: block;
+  height: auto;
+  max-height: none;
   background: transparent;
   padding: 0;
   color: inherit;

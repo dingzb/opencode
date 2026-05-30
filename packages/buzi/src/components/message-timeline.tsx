@@ -1,17 +1,12 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
-import type { Message, Part, Provider, AssistantMessage } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, Provider, AssistantMessage, UserMessage } from "@opencode-ai/sdk/v2/client"
 import { Bot, Copy, Check } from "lucide-react"
 import { Virtualizer, type VirtualizerHandle } from "virtua"
-import { Markdown } from "./markdown"
-import { ProcessPart } from "./process-part"
 import { cn } from "../lib/utils"
+import { AssistantPartList } from "./message-parts/assistant-part-list"
 
 function textParts(parts: Part[]) {
   return parts.filter((part) => part.type === "text").map((part) => part.text)
-}
-
-function processParts(parts: Part[]) {
-  return parts.filter((part) => part.type !== "text" && part.type !== "step-start" && part.type !== "step-finish")
 }
 
 const emptyParts: Part[] = []
@@ -54,9 +49,7 @@ function modelDisplayName(
 
 const MessageItem = memo(function MessageItem(props: { message: Message; parts: Part[]; providers?: Array<Provider>; turnDurationMs?: number }) {
   const text = useMemo(() => textParts(props.parts).join("\n\n"), [props.parts])
-  const processes = useMemo(() => processParts(props.parts), [props.parts])
   const user = props.message.role === "user"
-  const streaming = !user && (!("completed" in props.message.time) || typeof props.message.time.completed !== "number")
   const [copied, setCopied] = useState(false)
 
   const metaItems = useMemo(() => {
@@ -95,15 +88,15 @@ const MessageItem = memo(function MessageItem(props: { message: Message; parts: 
             {text || "Message sent"}
           </div>
         ) : (
-          <div className="min-w-0 flex-1">
-            {processes.map((part) => (
-              <ProcessPart key={part.id} part={part} />
-            ))}
-            {text ? <Markdown text={text} streaming={streaming} /> : <div className="text-sm text-zinc-500">Waiting for output...</div>}
-          </div>
+          <AssistantPartList
+            message={props.message}
+            parts={props.parts}
+            meta={metaItems}
+            turnDurationMs={props.turnDurationMs}
+          />
         )}
       </div>
-      {metaItems ? (
+      {user && metaItems ? (
         <div className={cn("mt-1.5 flex items-center gap-1.5 text-xs text-zinc-400 select-none", user ? "text-right" : "text-left")}>
           <span>{metaItems}</span>
           <button
@@ -119,16 +112,82 @@ const MessageItem = memo(function MessageItem(props: { message: Message; parts: 
   )
 })
 
+type TurnRow = {
+  user: UserMessage
+  userParts: Part[]
+  assistants: AssistantMessage[]
+  assistantParts: Part[]
+}
+
+const TurnItem = memo(function TurnItem(props: { row: TurnRow; providers?: Array<Provider>; turnDurationMs?: number; onSizeChange: () => void }) {
+  const assistant = props.row.assistants.at(-1)
+  const ref = useRef<HTMLDivElement>(null)
+  const assistantMeta = useMemo(() => {
+    if (!assistant) return ""
+    const agent = formatAgent(assistant.agent)
+    const model = modelDisplayName(assistant, props.providers)
+    const items = [agent, model].filter(Boolean)
+    if (typeof props.turnDurationMs === "number" && props.turnDurationMs >= 0) items.push(formatDuration(props.turnDurationMs))
+    return items.join(" · ")
+  }, [assistant, props.providers, props.turnDurationMs])
+
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const observer = new ResizeObserver(props.onSizeChange)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [props.onSizeChange])
+
+  return (
+    <div ref={ref} className="mx-auto max-w-[800px] pb-7">
+      <MessageItem message={props.row.user} parts={props.row.userParts} providers={props.providers} />
+      {assistant ? (
+        <div className="mt-4 flex w-full justify-start">
+          <AssistantPartList
+            message={assistant}
+            parts={props.row.assistantParts}
+            meta={assistantMeta}
+            turnDurationMs={props.turnDurationMs}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+})
+
 export function MessageTimeline(props: { messages: Message[]; parts: Record<string, Part[]>; loading: boolean; providers?: Array<Provider> }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizerRef = useRef<VirtualizerHandle>(null)
   const stickToBottomRef = useRef(true)
   const scrollFrameRef = useRef<number | undefined>(undefined)
   const userScrollAtRef = useRef(0)
+  const rows = useMemo(() => {
+    const assistantsByParent = props.messages.reduce((result, message) => {
+      if (message.role !== "assistant") return result
+      const existing = result.get(message.parentID)
+      if (existing) existing.push(message)
+      else result.set(message.parentID, [message])
+      return result
+    }, new Map<string, AssistantMessage[]>())
+
+    return props.messages
+      .filter((message): message is UserMessage => message.role === "user")
+      .map((user) => {
+        const assistants = assistantsByParent.get(user.id) ?? []
+        return {
+          user,
+          userParts: props.parts[user.id] ?? emptyParts,
+          assistants,
+          assistantParts: assistants.flatMap((assistant) => props.parts[assistant.id] ?? emptyParts),
+        }
+      })
+  }, [props.messages, props.parts])
+
   const keepMounted = useMemo(() => {
-    if (props.messages.length === 0) return []
-    return [props.messages.length - 1]
-  }, [props.messages.length])
+    if (rows.length === 0) return []
+    return [rows.length - 1]
+  }, [rows.length])
 
   const turnDurationMs = useMemo(() => {
     const map = new Map<string, number>()
@@ -157,11 +216,16 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
       scrollFrameRef.current = undefined
       const element = scrollRef.current
       if (!element || !stickToBottomRef.current) return
-      if (props.messages.length === 0) return
-      virtualizerRef.current?.scrollToIndex(props.messages.length - 1, { align: "end" })
+      if (rows.length === 0) return
+      virtualizerRef.current?.scrollToIndex(rows.length - 1, { align: "end" })
       element.scrollTop = element.scrollHeight
     })
-  }, [props.messages.length])
+  }, [rows.length])
+
+  const handleRowSizeChange = useCallback(() => {
+    if (!stickToBottomRef.current) return
+    scrollToBottom()
+  }, [scrollToBottom])
 
   const markUserScroll = useCallback(() => {
     userScrollAtRef.current = Date.now()
@@ -193,7 +257,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
     return <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">Loading conversations...</div>
   }
 
-  if (props.messages.length === 0) {
+  if (rows.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8 pb-36 text-center">
         <div className="mb-3 rounded-full border border-zinc-200 bg-white p-3 shadow-sm">
@@ -225,21 +289,19 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
       onWheel={markUserScroll}
     >
       <Virtualizer
-        data={props.messages}
+        data={rows}
         itemSize={96}
         keepMounted={keepMounted}
         ref={virtualizerRef}
         scrollRef={scrollRef}
       >
-        {(message) => (
-          <div className="mx-auto max-w-[800px] pb-7">
-            <MessageItem
-              message={message}
-              parts={props.parts[message.id] ?? emptyParts}
-              providers={props.providers}
-              turnDurationMs={message.role === "assistant" ? turnDurationMs.get(message.parentID) : undefined}
-            />
-          </div>
+        {(row) => (
+          <TurnItem
+            row={row}
+            providers={props.providers}
+            turnDurationMs={turnDurationMs.get(row.user.id)}
+            onSizeChange={handleRowSizeChange}
+          />
         )}
       </Virtualizer>
     </div>
