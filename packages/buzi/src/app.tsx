@@ -19,6 +19,7 @@ const selectedModelStoragePrefix = "buzi:model-selection:"
 const selectedVariantStoragePrefix = "buzi:model-variant:"
 const selectedVariantDefaultValue = "__default__"
 const projectsStorageKey = "buzi:projects:v1"
+const sidebarDefaultWidth = 304
 
 type ModelOption = {
   value: string
@@ -150,9 +151,12 @@ export function App() {
   const [directory, setDirectory] = useState<string>()
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("conversations")
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 1104)
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(window.innerWidth < 1408)
-  const isOverlayMode = useMediaQuery("(max-width: 1103px)")
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(sidebarDefaultWidth)
+  const [inspectorWidth, setInspectorWidth] = useState(sidebarDefaultWidth)
+  const isPhoneOverlayLayout = useMediaQuery("(max-width: 767px)")
+  const shouldAutoHideSidebars = useMediaQuery("(max-width: 1280px)")
   const [selectedModelValue, setSelectedModelValue] = useState("")
   const [selectedVariant, setSelectedVariant] = useState<string | null | undefined>()
   const [restoredModelSessions, setRestoredModelSessions] = useState<Set<string>>(() => new Set())
@@ -567,17 +571,29 @@ export function App() {
   const title = activeSession ? sessionTitle(activeSession) : "New chat"
   const windowTitle = [title, activeDirectory].filter(Boolean).join(" - ") || "Buzi"
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => {
-      if (prev && isOverlayMode) setInspectorCollapsed(true)
-      return !prev
+    setSidebarOpen((open) => {
+      if (isPhoneOverlayLayout && !open) setInspectorOpen(false)
+      return !open
     })
-  }, [isOverlayMode])
+  }, [isPhoneOverlayLayout])
   const toggleInspector = useCallback(() => {
-    setInspectorCollapsed((prev) => {
-      if (prev && isOverlayMode) setSidebarCollapsed(true)
-      return !prev
+    setInspectorOpen((open) => {
+      if (isPhoneOverlayLayout && !open) setSidebarOpen(false)
+      return !open
     })
-  }, [isOverlayMode])
+  }, [isPhoneOverlayLayout])
+
+  useEffect(() => {
+    if (!shouldAutoHideSidebars) return
+    setSidebarOpen(false)
+    setInspectorOpen(false)
+  }, [shouldAutoHideSidebars])
+
+  useEffect(() => {
+    if (!isPhoneOverlayLayout) return
+    setSidebarOpen(false)
+    setInspectorOpen(false)
+  }, [isPhoneOverlayLayout])
 
   useEffect(() => {
     document.title = windowTitle
@@ -608,8 +624,8 @@ export function App() {
                 projectPath={activeDirectory ?? ""}
                 title={title}
                 serverState={serverState}
-                sidebarCollapsed={sidebarCollapsed}
-                inspectorCollapsed={inspectorCollapsed}
+                sidebarOpen={sidebarOpen}
+                inspectorOpen={inspectorOpen}
                 frameLeading={frameSlots.leading}
                 frameTrailing={frameSlots.trailing}
                 className={frameSlots.titleBarClassName}
@@ -620,72 +636,81 @@ export function App() {
               />
             ) : null}
             <div className="flex min-h-0 flex-1">
-            {!sidebarCollapsed && isOverlayMode ? (
-              <button
-                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px]"
-                aria-label="Close sidebar overlay"
-                onClick={() => setSidebarCollapsed(true)}
-              />
-            ) : null}
-            <LeftSidebar
-              activePanel={activeSidebarPanel}
-              collapsed={sidebarCollapsed}
-              onPanelChange={setActiveSidebarPanel}
-              conversations={
-                <ProjectsPanel
-                  projects={projects}
-                  sessions={state.sessions}
-                  directory={activeDirectory}
-                  activeSessionID={state.activeSessionID ?? undefined}
-                  titleForSession={sessionTitle}
-                  isSessionBusy={isSessionBusy}
-                  onSelect={handleSessionSelect}
-                  onNewSession={createSession}
-                  onAddProject={() => setProjectDialogOpen(true)}
-                  query={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  loading={currentProject.isLoading || sessions.isLoading}
+              {sidebarOpen ? (
+                <button
+                  className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
+                  aria-label="Close sidebar overlay"
+                  onClick={() => setSidebarOpen(false)}
                 />
-              }
-            />
-            <section className="relative flex min-w-0 flex-1 flex-col bg-[#fbfbfa]">
-              {health.isError || path.isError ? (
-                <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
-                </div>
               ) : null}
-              <MessageTimeline
-                messages={activeMessages}
-                parts={state.parts}
-                loading={messages.isLoading || path.isLoading || sessions.isLoading}
+              <LeftSidebar
+                activePanel={activeSidebarPanel}
+                open={sidebarOpen}
+                overlayActive={sidebarOpen && !inspectorOpen}
+                width={sidebarWidth}
+                onPanelChange={setActiveSidebarPanel}
+                onResize={setSidebarWidth}
+                conversations={
+                  <ProjectsPanel
+                    projects={projects}
+                    sessions={state.sessions}
+                    directory={activeDirectory}
+                    activeSessionID={state.activeSessionID ?? undefined}
+                    titleForSession={sessionTitle}
+                    isSessionBusy={isSessionBusy}
+                    onSelect={handleSessionSelect}
+                    onNewSession={createSession}
+                    onAddProject={() => setProjectDialogOpen(true)}
+                    query={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    loading={currentProject.isLoading || sessions.isLoading}
+                  />
+                }
               />
-              <Composer
-                disabled={!enabled || health.isError}
-                working={activeSessionStatus?.type === "busy"}
-                stopping={stoppingSessionID === state.activeSessionID}
-                modelOptions={modelOptions}
-                selectedModel={selectedModelValue}
-                onModelChange={handleModelChange}
-                variantOptions={variantOptions}
-                selectedVariant={currentVariant}
-                onVariantChange={handleVariantChange}
-                modelLoading={providers.isLoading}
-                agents={primaryAgents}
-                selectedAgent={selectedAgent}
-                onAgentChange={setSelectedAgent}
-                agentLoading={agents.isLoading}
-                onSubmit={submit}
-                onStop={stop}
+              <section className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden bg-[#fbfbfa]">
+                {health.isError || path.isError ? (
+                  <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
+                  </div>
+                ) : null}
+                <MessageTimeline
+                  messages={activeMessages}
+                  parts={state.parts}
+                  loading={messages.isLoading || path.isLoading || sessions.isLoading}
+                />
+                <Composer
+                  disabled={!enabled || health.isError}
+                  working={activeSessionStatus?.type === "busy"}
+                  stopping={stoppingSessionID === state.activeSessionID}
+                  modelOptions={modelOptions}
+                  selectedModel={selectedModelValue}
+                  onModelChange={handleModelChange}
+                  variantOptions={variantOptions}
+                  selectedVariant={currentVariant}
+                  onVariantChange={handleVariantChange}
+                  modelLoading={providers.isLoading}
+                  agents={primaryAgents}
+                  selectedAgent={selectedAgent}
+                  onAgentChange={setSelectedAgent}
+                  agentLoading={agents.isLoading}
+                  onSubmit={submit}
+                  onStop={stop}
+                />
+              </section>
+              {inspectorOpen ? (
+                <button
+                  className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
+                  aria-label="Close inspector overlay"
+                  onClick={() => setInspectorOpen(false)}
+                />
+              ) : null}
+              <RightInspector
+                open={inspectorOpen}
+                overlayActive={inspectorOpen}
+                width={inspectorWidth}
+                onClose={() => setInspectorOpen(false)}
+                onResize={setInspectorWidth}
               />
-            </section>
-{!inspectorCollapsed && isOverlayMode ? (
-              <button
-                className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px]"
-                aria-label="Close inspector overlay"
-                onClick={() => setInspectorCollapsed(true)}
-              />
-            ) : null}
-            <RightInspector collapsed={inspectorCollapsed} onClose={() => setInspectorCollapsed(true)} />
             </div>
           </main>
           <DialogSelectProjectDirectory

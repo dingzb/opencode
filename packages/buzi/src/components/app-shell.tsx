@@ -1,4 +1,4 @@
-import { useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
+import { useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 import {
   Blocks,
   BookOpen,
@@ -29,13 +29,15 @@ const sidebarPanels: Array<{ id: SidebarPanel; label: string; icon: typeof Messa
 ]
 
 const windowDragThreshold = 4
+const sidebarMinWidth = 240
+const sidebarMaxWidth = 420
 
 export function TitleBar(props: {
   projectPath: string
   title: string
   serverState: "connected" | "connecting" | "error"
-  sidebarCollapsed: boolean
-  inspectorCollapsed: boolean
+  sidebarOpen: boolean
+  inspectorOpen: boolean
   frameLeading?: ReactNode
   frameTrailing?: ReactNode
   className?: string
@@ -108,10 +110,10 @@ export function TitleBar(props: {
         {props.frameLeading}
         <button
           className="flex size-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
-          title={props.sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          title={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
           onClick={props.onToggleSidebar}
         >
-          {props.sidebarCollapsed ? <PanelLeft className="size-4" /> : <PanelLeftClose className="size-4" />}
+          {props.sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
         </button>
       </div>
       <div className="flex min-w-0 justify-center">
@@ -144,10 +146,10 @@ export function TitleBar(props: {
           </button>
           <button
             className="flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
-            title={props.inspectorCollapsed ? "Show inspector" : "Hide inspector"}
+            title={props.inspectorOpen ? "Hide inspector" : "Show inspector"}
             onClick={props.onToggleInspector}
           >
-            {props.inspectorCollapsed ? <PanelRight className="size-4" /> : <PanelRightClose className="size-4" />}
+            {props.inspectorOpen ? <PanelRightClose className="size-4" /> : <PanelRight className="size-4" />}
           </button>
           <button
             className="hidden size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950 sm:flex"
@@ -162,20 +164,19 @@ export function TitleBar(props: {
   )
 }
 
-export function RightInspector(props: { collapsed: boolean; onClose: () => void }) {
-  return (
-    <aside
-      aria-hidden={props.collapsed}
-      className={cn(
-        "fixed bottom-0 right-0 top-12 z-30 flex w-[min(360px,calc(100vw-0.5rem))] shrink-0 flex-col overflow-hidden rounded-l-xl border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out min-[1104px]:static min-[1104px]:h-full min-[1104px]:w-[304px] min-[1104px]:rounded-none min-[1104px]:border-y-0 min-[1104px]:border-r-0 min-[1104px]:shadow-none min-[1104px]:border-l min-[1104px]:border-zinc-200/80",
-        props.collapsed &&
-          "pointer-events-none translate-x-full opacity-0 min-[1104px]:w-0 min-[1104px]:translate-x-0 min-[1104px]:border-transparent min-[1104px]:opacity-100 min-[1104px]:pointer-events-auto min-[1104px]:overflow-hidden",
-      )}
-    >
+export function RightInspector(props: {
+  open: boolean
+  overlayActive: boolean
+  width: number
+  onClose: () => void
+  onResize: (width: number) => void
+}) {
+  const renderContent = () => (
+    <>
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 px-3">
         <div className="truncate text-[13px] font-semibold text-zinc-950">Inspector</div>
         <button
-          className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950 min-[1104px]:hidden"
+          className="flex size-7 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950"
           title="Close inspector"
           onClick={props.onClose}
         >
@@ -188,33 +189,127 @@ export function RightInspector(props: { collapsed: boolean; onClose: () => void 
           <div className="mt-1 text-xs leading-5 text-zinc-500">Agent Runtime Inspector content will be added later.</div>
         </div>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      <aside
+        aria-hidden={!props.open}
+        className={cn(
+          "fixed bottom-0 right-0 top-12 flex w-[min(360px,calc(100vw-0.5rem))] translate-x-full flex-col overflow-hidden rounded-l-xl border border-zinc-200/80 bg-[#f1f1ef] opacity-0 shadow-2xl shadow-zinc-950/20 transition-[transform,opacity] duration-200 ease-out pointer-events-none md:hidden",
+          props.overlayActive ? "z-40" : "z-30",
+          props.open && "translate-x-0 opacity-100 pointer-events-auto",
+        )}
+      >
+        {renderContent()}
+      </aside>
+      <aside
+        aria-hidden={!props.open}
+        className={cn(
+          "relative hidden h-full w-0 shrink-0 flex-col overflow-hidden border-l border-transparent bg-[#f1f1ef] transition-[width,border-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] pointer-events-none motion-reduce:transition-none md:flex",
+          props.open && "border-zinc-200/80 pointer-events-auto",
+        )}
+        style={{ width: props.open ? props.width : 0 }}
+      >
+        <ResizeGrip side="right" width={props.width} onResize={props.onResize} />
+        {renderContent()}
+      </aside>
+    </>
   )
 }
 
 export function LeftSidebar(props: {
   activePanel: SidebarPanel
-  collapsed: boolean
+  open: boolean
+  overlayActive: boolean
+  width: number
   onPanelChange: (panel: SidebarPanel) => void
+  onResize: (width: number) => void
   conversations: ReactNode
 }) {
   const feature = sidebarPanels.find((panel) => panel.id === props.activePanel)
-
-  return (
-    <aside
-      aria-hidden={props.collapsed}
-      className={cn(
-        "fixed bottom-0 left-0 top-12 z-30 flex w-[min(340px,calc(100vw-0.5rem))] shrink-0 flex-col overflow-hidden rounded-r-xl border border-zinc-200/80 bg-[#f1f1ef] shadow-2xl shadow-zinc-950/20 transition-[transform,opacity,width,border-color] duration-200 ease-out min-[1104px]:static min-[1104px]:h-full min-[1104px]:w-[304px] min-[1104px]:rounded-none min-[1104px]:border-y-0 min-[1104px]:border-l-0 min-[1104px]:shadow-none",
-        props.collapsed &&
-          "pointer-events-none -translate-x-full opacity-0 min-[1104px]:w-0 min-[1104px]:translate-x-0 min-[1104px]:border-transparent",
-      )}
-    >
+  const renderContent = () => (
+    <>
       <div className="min-h-0 flex-1 flex flex-col">
         {props.activePanel === "conversations" ? props.conversations : <FeaturePanel panel={feature} onBack={() => props.onPanelChange("conversations")} />}
       </div>
       <SidebarDock activePanel={props.activePanel} onPanelChange={props.onPanelChange} />
-    </aside>
+    </>
   )
+
+  return (
+    <>
+      <aside
+        aria-hidden={!props.open}
+        className={cn(
+          "fixed bottom-0 left-0 top-12 flex w-[min(340px,calc(100vw-0.5rem))] -translate-x-full flex-col overflow-hidden rounded-r-xl border border-zinc-200/80 bg-[#f1f1ef] opacity-0 shadow-2xl shadow-zinc-950/20 transition-[transform,opacity] duration-200 ease-out pointer-events-none md:hidden",
+          props.overlayActive ? "z-40" : "z-30",
+          props.open && "translate-x-0 opacity-100 pointer-events-auto",
+        )}
+      >
+        {renderContent()}
+      </aside>
+      <aside
+        aria-hidden={!props.open}
+        className={cn(
+          "relative hidden h-full w-0 shrink-0 flex-col overflow-hidden border-r border-transparent bg-[#f1f1ef] transition-[width,border-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] pointer-events-none motion-reduce:transition-none md:flex",
+          props.open && "border-zinc-200/80 pointer-events-auto",
+        )}
+        style={{ width: props.open ? props.width : 0 }}
+      >
+        {renderContent()}
+        <ResizeGrip side="left" width={props.width} onResize={props.onResize} />
+      </aside>
+    </>
+  )
+}
+
+function ResizeGrip(props: { side: "left" | "right"; width: number; onResize: (width: number) => void }) {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+
+    const startX = event.clientX
+    const ownerDocument = event.currentTarget.ownerDocument
+    const sidebar = event.currentTarget.parentElement
+    const previousTransition = sidebar?.style.transition
+
+    const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
+      const delta = moveEvent.clientX - startX
+      props.onResize(clampSidebarWidth(props.side === "left" ? props.width + delta : props.width - delta))
+    }
+
+    const cleanup = () => {
+      ownerDocument.removeEventListener("pointermove", handlePointerMove)
+      ownerDocument.removeEventListener("pointerup", cleanup)
+      ownerDocument.removeEventListener("pointercancel", cleanup)
+      ownerDocument.body.style.cursor = ""
+      ownerDocument.body.style.userSelect = ""
+      if (sidebar) sidebar.style.transition = previousTransition ?? ""
+    }
+
+    if (sidebar) sidebar.style.transition = "none"
+    ownerDocument.body.style.cursor = "col-resize"
+    ownerDocument.body.style.userSelect = "none"
+    ownerDocument.addEventListener("pointermove", handlePointerMove)
+    ownerDocument.addEventListener("pointerup", cleanup, { once: true })
+    ownerDocument.addEventListener("pointercancel", cleanup, { once: true })
+  }
+
+  return (
+    <div
+      className={cn(
+        "absolute inset-y-0 z-10 hidden w-1.5 cursor-col-resize hover:bg-zinc-300/40 md:block",
+        props.side === "left" ? "right-0" : "left-0",
+      )}
+      onPointerDown={handlePointerDown}
+    />
+  )
+}
+
+function clampSidebarWidth(width: number) {
+  return Math.min(sidebarMaxWidth, Math.max(sidebarMinWidth, Math.round(width)))
 }
 
 function FeaturePanel(props: { panel?: { label: string; icon: typeof MessageCircle }; onBack: () => void }) {

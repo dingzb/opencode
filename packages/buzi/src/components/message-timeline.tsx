@@ -107,7 +107,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
   return (
     <div
       ref={scrollRef}
-      className="chat-scrollbar flex-1 overflow-y-scroll px-7 pb-40 pt-7"
+      className="chat-scrollbar min-w-0 flex-1 overflow-x-hidden overflow-y-scroll px-7 pb-40 pt-7"
       onKeyDown={markUserScroll}
       onPointerDown={markUserScroll}
       onScroll={(event) => {
