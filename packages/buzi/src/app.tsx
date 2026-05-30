@@ -677,6 +677,7 @@ export function App() {
                   messages={activeMessages}
                   parts={state.parts}
                   loading={messages.isLoading || path.isLoading || sessions.isLoading}
+                  providers={providers.data?.all}
                 />
                 <Composer
                   disabled={!enabled || health.isError}

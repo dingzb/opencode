@@ -19,7 +19,7 @@ function sessionTime(session: Session) {
   return session.time.updated ?? session.time.created
 }
 
-function relativeTime(value: number) {
+export function relativeTime(value: number) {
   const seconds = Math.max(0, Math.floor((Date.now() - value) / 1000))
   const minute = 60
   const hour = minute * 60
