@@ -155,17 +155,21 @@ input {
 }
 
 .markdown [data-streamdown="code-block"] {
-  gap: 0.25rem;
+  gap: 0.5rem;
   margin: 0.85rem 0;
   border: 0;
   border-radius: 0.5rem;
-  background: transparent;
+  background: #f1f1ef;
   padding: 0;
 }
 
 .markdown [data-streamdown="code-block-header"] {
-  height: 1.6rem;
-  padding: 0 0.125rem;
+  display: flex;
+  align-items: center;
+  height: 2rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: #f1f1ef;
+  padding: 0 0.85rem;
   color: #a1a1aa;
   font-size: 11px;
   line-height: 1.4;
@@ -179,25 +183,15 @@ input {
 
 .markdown [data-streamdown="code-block-actions"] {
   border: 0;
-  background: rgb(244 244 245 / 86%);
-  padding: 0.125rem 0.25rem;
+  background: #f1f1ef;
   box-shadow: none;
-}
-
-.markdown [data-streamdown="code-block-actions"] button {
-  padding: 0.125rem;
-}
-
-.markdown [data-streamdown="code-block-actions"] svg {
-  width: 12px;
-  height: 12px;
 }
 
 .markdown [data-streamdown="code-block-body"] {
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: 0 0 0.5rem 0.5rem;
   background: #f1f1ef;
-  padding: 0.85rem;
+  padding: 0 0.85rem 0.85rem;
   color: #3f3f46;
   font-size: 13px;
   line-height: 1.65;

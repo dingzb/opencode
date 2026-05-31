@@ -9,7 +9,7 @@ export default defineConfig({
     port: 4455,
     strictPort: true,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/src-gtk/**", "**/target/**"],
     },
   },
 })
