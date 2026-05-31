@@ -23,6 +23,10 @@ function removeKey<T>(items: Record<string, T>, key: string) {
   return Object.fromEntries(Object.entries(items).filter(([id]) => id !== key))
 }
 
+function removeKeys<T>(items: Record<string, T>, keys: Set<string>) {
+  return Object.fromEntries(Object.entries(items).filter(([id]) => !keys.has(id)))
+}
+
 function updatePart(parts: Part[] | undefined, partID: string, field: string, delta: string) {
   return (parts ?? []).map((part) => {
     if (part.id !== partID) return part
@@ -69,6 +73,25 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         sessions: mergeLoadedSessions(state.sessions, action.sessions).sort((a, b) => sessionTime(b) - sessionTime(a)),
       }
+    case "project.close": {
+      const sessionIDs = new Set(
+        state.sessions
+          .filter((session) => session.projectID === action.projectID || session.directory === action.directory)
+          .map((session) => session.id),
+      )
+      const messageIDs = new Set(
+        [...sessionIDs].flatMap((sessionID) => (state.messages[sessionID] ?? []).map((message) => message.id)),
+      )
+      return {
+        ...state,
+        sessions: state.sessions.filter((session) => !sessionIDs.has(session.id)),
+        messages: removeKeys(state.messages, sessionIDs),
+        parts: removeKeys(state.parts, messageIDs),
+        temporaryTitles: removeKeys(state.temporaryTitles, sessionIDs),
+        sessionStatus: removeKeys(state.sessionStatus, sessionIDs),
+        activeSessionID: state.activeSessionID && sessionIDs.has(state.activeSessionID) ? undefined : state.activeSessionID,
+      }
+    }
     case "session.active":
       return { ...state, activeSessionID: action.sessionID }
     case "session.upsert":
@@ -86,6 +109,16 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         temporaryTitles: { ...state.temporaryTitles, [action.sessionID]: action.title },
+      }
+    case "session.archive":
+      return {
+        ...state,
+        sessions: removeByID(state.sessions, action.sessionID),
+        temporaryTitles: removeKey(state.temporaryTitles, action.sessionID),
+        sessionStatus: Object.fromEntries(
+          Object.entries(state.sessionStatus).filter(([sessionID]) => sessionID !== action.sessionID),
+        ),
+        activeSessionID: state.activeSessionID === action.sessionID ? undefined : state.activeSessionID,
       }
     case "session.remove":
       return {

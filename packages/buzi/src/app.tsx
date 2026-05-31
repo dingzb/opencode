@@ -531,6 +531,24 @@ export function App() {
     setSelectedVariant(undefined)
   }, [projects, state.sessions])
 
+  const archiveSession = useCallback(async (session: Session) => {
+    dispatch({ type: "session.archive", sessionID: session.id })
+    await createOpencodeSdk({ serverUrl, directory: session.directory }).session
+      .update({ sessionID: session.id, time: { archived: Date.now() } })
+      .catch((error) => {
+        dispatch({ type: "session.upsert", session, source: "local" })
+        throw error
+      })
+    void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+  }, [queryClient])
+
+  const closeProject = useCallback((project: BuziProject) => {
+    setProjects((current) => current.filter((item) => item.id !== project.id && item.worktree !== project.worktree))
+    if (activeProjectID === project.id) setActiveProjectID(undefined)
+    dispatch({ type: "project.close", projectID: project.id, directory: project.worktree })
+    void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+  }, [activeProjectID, queryClient])
+
   const createSession = useCallback((project?: BuziProject) => {
     const nextProject = project ?? activeProject
     if (!nextProject) return
@@ -740,7 +758,9 @@ export function App() {
                     titleForSession={sessionTitle}
                     isSessionBusy={isSessionBusy}
                     onSelect={handleSessionSelect}
+                    onArchiveSession={archiveSession}
                     onNewSession={createSession}
+                    onCloseProject={closeProject}
                     onAddProject={() => setProjectDialogOpen(true)}
                     query={searchQuery}
                     onSearchChange={setSearchQuery}

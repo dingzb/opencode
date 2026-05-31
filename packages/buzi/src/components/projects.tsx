@@ -1,5 +1,5 @@
-import { ChevronDown, ChevronRight, Folder, FolderPlus, Folders, LoaderCircle, MessageSquarePlus, Search } from "lucide-react"
-import { useMemo, useState } from "react"
+import { Archive, ChevronDown, ChevronRight, Ellipsis, Folder, FolderPlus, Folders, LoaderCircle, MessageSquarePlus, Search } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 import type { BuziProject } from "../types/project"
 import { cn } from "../lib/utils"
@@ -72,13 +72,26 @@ export function ProjectsPanel(props: {
   titleForSession?: (session: Session) => string
   isSessionBusy?: (sessionID: string) => boolean
   onSelect: (sessionID: string) => void
+  onArchiveSession: (session: Session) => void
   onNewSession: (project: BuziProject) => void
+  onCloseProject: (project: BuziProject) => void
   onAddProject: () => void
   query: string
   onSearchChange: (query: string) => void
   loading: boolean
 }) {
   const [searchOpen, setSearchOpen] = useState(false)
+  const [projectMenuOpen, setProjectMenuOpen] = useState<string>()
+  useEffect(() => {
+    if (!projectMenuOpen) return
+    function closeProjectMenu(event: PointerEvent) {
+      if (event.target instanceof Element && event.target.closest("[data-project-menu]")) return
+      setProjectMenuOpen(undefined)
+    }
+    document.addEventListener("pointerdown", closeProjectMenu)
+    return () => document.removeEventListener("pointerdown", closeProjectMenu)
+  }, [projectMenuOpen])
+
   const projects = useMemo(() => {
     const term = props.query.trim().toLocaleLowerCase()
     return props.projects
@@ -119,6 +132,44 @@ export function ProjectsPanel(props: {
       else next.add(key)
       return next
     })
+  }
+
+  function renderSessionRow(session: Session) {
+    return (
+      <div
+        key={session.id}
+        title={`Last activity: ${subtitle(session)}`}
+        className={cn(
+          "group/session flex h-8 w-full items-center gap-2 rounded-md pl-8 pr-1.5 text-left transition-colors",
+          props.activeSessionID === session.id
+            ? "bg-white"
+            : "hover:bg-white/70",
+        )}
+      >
+        <button
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          onClick={() => props.onSelect(session.id)}
+        >
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-900">
+            {props.titleForSession?.(session) ?? title(session)}
+          </span>
+          <span className="flex h-6 shrink-0 items-center group-hover/session:hidden group-focus-within/session:hidden">
+            {props.isSessionBusy?.(session.id) ? (
+              <LoaderCircle className="size-3.5 shrink-0 animate-spin text-zinc-500" />
+            ) : (
+              <span className="shrink-0 text-[11px] text-zinc-500">{relativeTime(sessionTime(session))}</span>
+            )}
+          </span>
+        </button>
+        <button
+          className="hidden size-6 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:bg-white/90 hover:text-zinc-950 group-hover/session:flex group-focus-within/session:flex"
+          title="Archive chat"
+          onClick={() => props.onArchiveSession(session)}
+        >
+          <Archive className="size-3.5" />
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -164,9 +215,8 @@ export function ProjectsPanel(props: {
         {projects.map((item) => {
           const isCollapsed = collapsed.has(item.project.id)
           const sessionsExpanded = expandedSessions.has(item.project.id)
-          const visibleSessions = sessionsExpanded
-            ? item.sessions
-            : item.sessions.slice(0, defaultVisibleSessionCount)
+          const visibleSessions = item.sessions.slice(0, defaultVisibleSessionCount)
+          const hiddenSessions = item.sessions.slice(defaultVisibleSessionCount)
           const hasHiddenSessions = item.sessions.length > defaultVisibleSessionCount
           return (
             <div key={item.project.id} className="mb-2">
@@ -180,40 +230,75 @@ export function ProjectsPanel(props: {
                   <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-zinc-900">
                     {projectTitle(item.project)}
                   </span>
-                  <span className="shrink-0 text-[11px] text-zinc-500">{item.sessions.length}</span>
+                  <span
+                    className="shrink-0 text-[11px] text-zinc-500 group-hover:hidden group-focus-within:hidden data-[open=true]:hidden"
+                    data-open={projectMenuOpen === item.project.id}
+                  >
+                    {item.sessions.length}
+                  </span>
                 </button>
-                <button
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-white/90 hover:text-zinc-950"
-                  title="New Chat"
-                  onClick={() => props.onNewSession(item.project)}
+                <div
+                  className="hidden shrink-0 items-center gap-0.5 group-hover:flex group-focus-within:flex data-[open=true]:flex"
+                  data-open={projectMenuOpen === item.project.id}
                 >
-                  <MessageSquarePlus className="size-4" />
-                </button>
-              </div>
-              {!isCollapsed ? (
-                <div className="mt-1 space-y-1">
-                  {visibleSessions.map((session) => (
+                  <div className="relative shrink-0" data-project-menu>
                     <button
-                      key={session.id}
-                      title={`Last activity: ${subtitle(session)}`}
-                      className={cn(
-                        "flex h-8 w-full items-center gap-2 rounded-md pl-8 pr-2.5 text-left transition-colors",
-                        props.activeSessionID === session.id
-                          ? "bg-white"
-                          : "hover:bg-white/70",
-                      )}
-                      onClick={() => props.onSelect(session.id)}
+                      className="flex size-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-white/90 hover:text-zinc-950 data-[open=true]:bg-white/90 data-[open=true]:text-zinc-950"
+                      title="Project options"
+                      data-open={projectMenuOpen === item.project.id}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setProjectMenuOpen((current) => current === item.project.id ? undefined : item.project.id)
+                      }}
                     >
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-900">
-                        {props.titleForSession?.(session) ?? title(session)}
-                      </span>
-                      {props.isSessionBusy?.(session.id) ? (
-                        <LoaderCircle className="size-3.5 shrink-0 animate-spin text-zinc-500" />
-                      ) : (
-                        <span className="shrink-0 text-[11px] text-zinc-500">{relativeTime(sessionTime(session))}</span>
-                      )}
+                      <Ellipsis className="size-4" />
                     </button>
-                  ))}
+                    {projectMenuOpen === item.project.id ? (
+                      <div className="absolute right-0 top-8 z-20 w-36 rounded-md border border-zinc-200 bg-white p-1 shadow-lg shadow-zinc-950/10">
+                        <button
+                          className="flex h-6 w-full items-center rounded px-2 text-left text-[11px] font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
+                          onClick={() => {
+                            setProjectMenuOpen(undefined)
+                            props.onCloseProject(item.project)
+                          }}
+                        >
+                          Remove Project
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-white/90 hover:text-zinc-950"
+                    title="New Chat"
+                    onClick={() => props.onNewSession(item.project)}
+                  >
+                    <MessageSquarePlus className="size-4" />
+                  </button>
+                </div>
+              </div>
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+                  isCollapsed ? "grid-rows-[0fr] opacity-0 pointer-events-none" : "grid-rows-[1fr] opacity-100",
+                )}
+                aria-hidden={isCollapsed}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  <div className="mt-1 space-y-1">
+                  {visibleSessions.map(renderSessionRow)}
+                  {hasHiddenSessions ? (
+                    <div
+                      className={cn(
+                        "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+                        sessionsExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 pointer-events-none",
+                      )}
+                      aria-hidden={!sessionsExpanded}
+                    >
+                      <div className="min-h-0 overflow-hidden space-y-1">
+                        {hiddenSessions.map(renderSessionRow)}
+                      </div>
+                    </div>
+                  ) : null}
                   {!props.loading && item.sessions.length === 0 ? (
                     <div className="py-2 pl-8 text-xs text-zinc-500">No sessions</div>
                   ) : null}
@@ -226,7 +311,8 @@ export function ProjectsPanel(props: {
                     </button>
                   ) : null}
                 </div>
-              ) : null}
+                </div>
+              </div>
             </div>
           )
         })}

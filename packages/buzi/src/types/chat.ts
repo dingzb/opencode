@@ -16,9 +16,11 @@ export type ChatState = {
 
 export type ChatAction =
   | { type: "sessions.loaded"; sessions: Session[] }
+  | { type: "project.close"; projectID: string; directory: string }
   | { type: "session.active"; sessionID?: string | null }
   | { type: "session.upsert"; session: Session; source?: "created" | "updated" | "local" }
   | { type: "session.temporaryTitle"; sessionID: string; title: string }
+  | { type: "session.archive"; sessionID: string }
   | { type: "session.remove"; sessionID: string }
   | { type: "session.status"; sessionID: string; status: SessionStatus }
   | { type: "session.status.loaded"; statuses: Record<string, SessionStatus> }
