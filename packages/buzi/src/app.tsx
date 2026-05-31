@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import type { Agent, Model, Project } from "@opencode-ai/sdk/v2/client"
+import type { Agent, Model, Project, Session } from "@opencode-ai/sdk/v2/client"
 import { createOpencodeSdk } from "./lib/opencode"
 import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
@@ -10,6 +10,7 @@ import { ProjectsPanel } from "./components/projects"
 import { DialogSelectProjectDirectory } from "./components/dialog-select-project-directory"
 import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
+import { ProjectWelcome } from "./components/project-welcome"
 import { AppFrame } from "./shell/app-frame"
 import { setWindowTitle } from "./runtime/window-actions"
 import type { BuziProject } from "./types/project"
@@ -19,6 +20,7 @@ const selectedModelStoragePrefix = "buzi:model-selection:"
 const selectedVariantStoragePrefix = "buzi:model-variant:"
 const selectedVariantDefaultValue = "__default__"
 const projectsStorageKey = "buzi:projects:v1"
+const activeRouteStorageKey = "buzi:active-route:v1"
 const sidebarDefaultWidth = 304
 
 type ModelOption = {
@@ -27,6 +29,11 @@ type ModelOption = {
   providerName: string
   modelID: string
   model: Model
+}
+
+type ActiveRoute = {
+  projectID?: string
+  sessionID?: string | null
 }
 
 function modelValue(providerID: string, modelID: string) {
@@ -67,6 +74,33 @@ function writeProjects(projects: BuziProject[]) {
   window.localStorage.setItem(projectsStorageKey, JSON.stringify(projects))
 }
 
+function isStoredActiveRoute(value: unknown): value is ActiveRoute {
+  if (!value || typeof value !== "object") return false
+  const item = value as ActiveRoute
+  return (
+    (item.projectID === undefined || typeof item.projectID === "string") &&
+    (item.sessionID === undefined || item.sessionID === null || typeof item.sessionID === "string")
+  )
+}
+
+function readActiveRoute(): ActiveRoute {
+  try {
+    const value = window.localStorage.getItem(activeRouteStorageKey)
+    const parsed: unknown = value ? JSON.parse(value) : {}
+    return isStoredActiveRoute(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeActiveRoute(route: ActiveRoute) {
+  if (!route.projectID) {
+    window.localStorage.removeItem(activeRouteStorageKey)
+    return
+  }
+  window.localStorage.setItem(activeRouteStorageKey, JSON.stringify(route))
+}
+
 function projectRecord(project: Project): BuziProject {
   return {
     id: project.id,
@@ -92,6 +126,26 @@ function upsertProject(projects: BuziProject[], project: BuziProject) {
     },
   }
   return next
+}
+
+function sessionTime(session: Session) {
+  return session.time.updated ?? session.time.created
+}
+
+function latestSession(sessions: Session[]) {
+  return sessions
+    .filter((session) => !session.parentID && !session.time.archived)
+    .slice()
+    .sort((a, b) => sessionTime(b) - sessionTime(a))[0]
+}
+
+function projectForSession(projects: BuziProject[], session: Session | undefined) {
+  if (!session) return
+  return projects.find(
+    (project) =>
+      project.id === session.projectID ||
+      project.worktree === session.directory,
+  )
 }
 
 function selectedModelStorageKey(directory: string, sessionID?: string) {
@@ -148,7 +202,7 @@ function useMediaQuery(query: string) {
 
 export function App() {
   const queryClient = useQueryClient()
-  const [directory, setDirectory] = useState<string>()
+  const [initialRoute] = useState(readActiveRoute)
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("conversations")
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -163,6 +217,7 @@ export function App() {
   const [selectedAgent, setSelectedAgent] = useState("")
   const [stoppingSessionID, setStoppingSessionID] = useState<string>()
   const [projects, setProjects] = useState<BuziProject[]>(readProjects)
+  const [activeProjectID, setActiveProjectID] = useState(initialRoute.projectID)
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [state, dispatch] = useReducer(chatReducer, {
@@ -171,13 +226,17 @@ export function App() {
     temporaryTitles: {},
     messages: {},
     parts: {},
+    activeSessionID: initialRoute.sessionID,
   })
 
   const globalSdk = useMemo(() => createOpencodeSdk({ serverUrl }), [])
+  const activeProject = activeProjectID
+    ? projects.find((project) => project.id === activeProjectID)
+    : undefined
   const activeSession = state.activeSessionID
     ? state.sessions.find((session) => session.id === state.activeSessionID)
     : undefined
-  const activeDirectory = activeSession?.directory ?? directory
+  const activeDirectory = activeSession?.directory ?? activeProject?.worktree
   const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory: activeDirectory }), [activeDirectory])
   const enabled = Boolean(activeDirectory)
 
@@ -188,25 +247,6 @@ export function App() {
       return result.data
     },
     refetchInterval: 10_000,
-  })
-
-  const path = useQuery({
-    queryKey: ["path"],
-    queryFn: async () => {
-      const result = await globalSdk.path.get()
-      const next = result.data?.directory
-      if (next) setDirectory(next)
-      return result.data
-    },
-  })
-
-  const currentProject = useQuery({
-    queryKey: ["current-project", directory],
-    enabled: Boolean(directory),
-    queryFn: async () => {
-      const result = await createOpencodeSdk({ serverUrl, directory }).project.current()
-      return result.data
-    },
   })
 
   const sessions = useQuery({
@@ -223,6 +263,14 @@ export function App() {
       ).flat()
       dispatch({ type: "sessions.loaded", sessions: next })
       return next
+    },
+  })
+
+  const recentProjects = useQuery({
+    queryKey: ["recent-projects"],
+    queryFn: async () => {
+      const result = await globalSdk.project.list()
+      return result.data ?? []
     },
   })
 
@@ -318,19 +366,46 @@ export function App() {
   }, [projects])
 
   useEffect(() => {
-    const project = currentProject.data
-    if (!project) return
-    setProjects((current) => upsertProject(current, projectRecord(project)))
-  }, [currentProject.data])
+    writeActiveRoute({ projectID: activeProjectID, sessionID: state.activeSessionID })
+  }, [activeProjectID, state.activeSessionID])
 
   useEffect(() => {
-    if (!directory) return
-    dispatch({ type: "session.active", sessionID: undefined })
+    if (projects.length === 0) {
+      if (activeProjectID !== undefined) setActiveProjectID(undefined)
+      return
+    }
+
+    if (activeProject && state.activeSessionID === null) return
+
+    if (state.activeSessionID) {
+      const project = projectForSession(projects, activeSession)
+      if (project) {
+        if (project.id !== activeProjectID) setActiveProjectID(project.id)
+        return
+      }
+      if (sessions.isLoading) return
+    }
+
+    if (sessions.isLoading) return
+
+    const latest = latestSession(state.sessions)
+    if (latest) {
+      const project = projectForSession(projects, latest)
+      setActiveProjectID(project?.id ?? projects[0].id)
+      dispatch({ type: "session.active", sessionID: latest.id })
+      return
+    }
+
+    setActiveProjectID(activeProject?.id ?? projects[0].id)
+    dispatch({ type: "session.active", sessionID: null })
+  }, [activeProject, activeProjectID, activeSession, projects, sessions.isLoading, state.activeSessionID, state.sessions])
+
+  useEffect(() => {
     setSelectedModelValue("")
     setSelectedVariant(undefined)
     setSelectedAgent("")
     setRestoredModelSessions(new Set())
-  }, [directory])
+  }, [activeDirectory])
 
   useEffect(() => {
     if (modelOptions.length === 0) return
@@ -403,7 +478,6 @@ export function App() {
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["health"] })
-    void queryClient.invalidateQueries({ queryKey: ["path"] })
     void queryClient.invalidateQueries({ queryKey: ["sessions"] })
     void queryClient.invalidateQueries({ queryKey: ["session-status"] })
     void queryClient.invalidateQueries({ queryKey: ["providers"] })
@@ -450,32 +524,35 @@ export function App() {
   )
 
   const handleSessionSelect = useCallback((sessionID: string) => {
+    const project = projectForSession(projects, state.sessions.find((session) => session.id === sessionID))
+    if (project) setActiveProjectID(project.id)
     dispatch({ type: "session.active", sessionID })
     setSelectedModelValue("")
     setSelectedVariant(undefined)
-  }, [])
+  }, [projects, state.sessions])
 
-  const createSession = useCallback(async (project?: BuziProject) => {
-    if (!enabled) return
-    if (project) {
-      setDirectory(project.worktree)
-      void queryClient.invalidateQueries({ queryKey: ["sessions"] })
-    }
+  const createSession = useCallback((project?: BuziProject) => {
+    const nextProject = project ?? activeProject
+    if (!nextProject) return
+    setActiveProjectID(nextProject.id)
     dispatch({ type: "session.active", sessionID: null })
     setSelectedModelValue("")
     setSelectedVariant(undefined)
-  }, [enabled, queryClient])
+    void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+  }, [activeProject, queryClient])
 
   const addProject = useCallback(
     async (nextDirectory: string) => {
       const result = await createOpencodeSdk({ serverUrl, directory: nextDirectory }).project.current()
       const project = result.data
       if (!project) return
-      setProjects((current) => upsertProject(current, projectRecord(project)))
-      setDirectory(project.worktree)
-      dispatch({ type: "session.active", sessionID: undefined })
+      const nextProject = projectRecord(project)
+      setProjects((current) => upsertProject(current, nextProject))
+      setActiveProjectID(nextProject.id)
+      dispatch({ type: "session.active", sessionID: null })
       setProjectDialogOpen(false)
       void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+      void queryClient.invalidateQueries({ queryKey: ["recent-projects"] })
     },
     [queryClient],
   )
@@ -488,6 +565,8 @@ export function App() {
       if (!sessionID) return
       if (newSession?.data) dispatch({ type: "session.upsert", session: newSession.data })
       if (newSession?.data) dispatch({ type: "session.temporaryTitle", sessionID, title: temporaryTitle(text) })
+      const project = projectForSession(projects, newSession?.data ?? activeSession)
+      if (project) setActiveProjectID(project.id)
       dispatch({ type: "session.active", sessionID })
       writeSelectedModel(activeDirectory, selectedModelValue, sessionID)
       writeSelectedVariant(activeDirectory, selectedVariant, sessionID)
@@ -538,6 +617,8 @@ export function App() {
       selectedModelValue,
       selectedVariant,
       currentVariant,
+      activeSession,
+      projects,
       state.activeSessionID,
       state.messages,
       state.parts,
@@ -566,9 +647,9 @@ export function App() {
     state.sessionStatus,
   ])
   const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
-  const connected = health.data?.healthy === true && status === "connected"
-  const serverState = health.isError || path.isError ? "error" : connected ? "connected" : "connecting"
-  const title = activeSession ? sessionTitle(activeSession) : "New chat"
+  const connected = health.data?.healthy === true && (!enabled || status === "connected")
+  const serverState = health.isError ? "error" : connected ? "connected" : "connecting"
+  const title = activeSession ? sessionTitle(activeSession) : activeProject ? "New chat" : "Welcome"
   const windowTitle = [title, activeDirectory].filter(Boolean).join(" - ") || "Buzi"
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((open) => {
@@ -663,40 +744,51 @@ export function App() {
                     onAddProject={() => setProjectDialogOpen(true)}
                     query={searchQuery}
                     onSearchChange={setSearchQuery}
-                    loading={currentProject.isLoading || sessions.isLoading}
+                    loading={sessions.isLoading}
                   />
                 }
               />
               <section className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden bg-[#fbfbfa]">
-                {health.isError || path.isError ? (
+                {health.isError ? (
                   <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
                   </div>
                 ) : null}
-                <MessageTimeline
-                  messages={activeMessages}
-                  parts={state.parts}
-                  loading={messages.isLoading || path.isLoading || sessions.isLoading}
-                  providers={providers.data?.all}
-                />
-                <Composer
-                  disabled={!enabled || health.isError}
-                  working={activeSessionStatus?.type === "busy"}
-                  stopping={stoppingSessionID === state.activeSessionID}
-                  modelOptions={modelOptions}
-                  selectedModel={selectedModelValue}
-                  onModelChange={handleModelChange}
-                  variantOptions={variantOptions}
-                  selectedVariant={currentVariant}
-                  onVariantChange={handleVariantChange}
-                  modelLoading={providers.isLoading}
-                  agents={primaryAgents}
-                  selectedAgent={selectedAgent}
-                  onAgentChange={setSelectedAgent}
-                  agentLoading={agents.isLoading}
-                  onSubmit={submit}
-                  onStop={stop}
-                />
+                {!activeProject ? (
+                  <ProjectWelcome
+                    recentProjects={recentProjects.data}
+                    loading={recentProjects.isLoading}
+                    onAddProject={() => setProjectDialogOpen(true)}
+                    onOpenProject={addProject}
+                  />
+                ) : (
+                  <>
+                    <MessageTimeline
+                      messages={activeMessages}
+                      parts={state.parts}
+                      loading={state.activeSessionID !== null && (messages.isLoading || sessions.isLoading)}
+                      providers={providers.data?.all}
+                    />
+                    <Composer
+                      disabled={!enabled || health.isError}
+                      working={activeSessionStatus?.type === "busy"}
+                      stopping={stoppingSessionID === state.activeSessionID}
+                      modelOptions={modelOptions}
+                      selectedModel={selectedModelValue}
+                      onModelChange={handleModelChange}
+                      variantOptions={variantOptions}
+                      selectedVariant={currentVariant}
+                      onVariantChange={handleVariantChange}
+                      modelLoading={providers.isLoading}
+                      agents={primaryAgents}
+                      selectedAgent={selectedAgent}
+                      onAgentChange={setSelectedAgent}
+                      agentLoading={agents.isLoading}
+                      onSubmit={submit}
+                      onStop={stop}
+                    />
+                  </>
+                )}
               </section>
               {inspectorOpen ? (
                 <button

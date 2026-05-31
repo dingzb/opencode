@@ -68,7 +68,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         sessions: mergeLoadedSessions(state.sessions, action.sessions).sort((a, b) => sessionTime(b) - sessionTime(a)),
-        activeSessionID: state.activeSessionID === undefined ? action.sessions[0]?.id : state.activeSessionID,
       }
     case "session.active":
       return { ...state, activeSessionID: action.sessionID }

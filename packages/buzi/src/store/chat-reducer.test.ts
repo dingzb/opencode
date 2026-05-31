@@ -49,6 +49,15 @@ test("chatReducer keeps explicit draft session active while loading sessions", (
   expect(next.activeSessionID).toBe(null)
 })
 
+test("chatReducer does not auto-select a session when sessions load", () => {
+  const next = chatReducer(initial, {
+    type: "sessions.loaded",
+    sessions: [session({ id: "ses_1", title: "Existing session", created: 1 })],
+  })
+
+  expect(next.activeSessionID).toBe(undefined)
+})
+
 test("chatReducer keeps temporary title on session created", () => {
   const state = chatReducer(
     chatReducer(initial, { type: "session.temporaryTitle", sessionID: "ses_1", title: "First prompt" }),
