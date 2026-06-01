@@ -925,7 +925,7 @@ export function App() {
                     />
                   }
                 />
-                <section className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden bg-zinc-50">
+                <section className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden bg-white">
                   {!activeProject ? (
                     <ProjectWelcome
                       recentProjects={recentProjects.data}
