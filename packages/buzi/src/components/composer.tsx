@@ -1,5 +1,5 @@
-import { ArrowUp, Bot, Brain, Check, ChevronDown, ChevronRight, Plus, Search, Square, Zap } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { ArrowUp, Bot, Brain, Check, ChevronDown, ChevronRight, MoreHorizontal, Plus, Search, Square, Zap } from "lucide-react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import type { Agent, Model } from "@opencode-ai/sdk/v2/client"
 import { Button } from "./ui/button"
@@ -44,6 +44,8 @@ type DropdownGroup = {
   options: DropdownOption[]
 }
 
+const compactComposerControlsWidth = 420
+
 function formatAgentName(name: string) {
   return name.charAt(0).toLocaleUpperCase() + name.slice(1)
 }
@@ -64,7 +66,9 @@ function DropdownControl(props: {
   searchable?: boolean
   menuWidth?: string
   showMeta?: boolean
+  buttonClassName?: string
   onChange: (value: string) => void
+  onSelect?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -121,6 +125,7 @@ function DropdownControl(props: {
         className={cn(
           "composer-control flex h-8 min-w-0 max-w-56 items-center gap-1.5 rounded-lg px-2 font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-50",
           open && "bg-zinc-100 text-zinc-800",
+          props.buttonClassName,
         )}
         disabled={props.disabled}
         onClick={() => setOpen((value) => !value)}
@@ -184,6 +189,7 @@ function DropdownControl(props: {
                                   )}
                                   onClick={() => {
                                     props.onChange(option.value)
+                                    props.onSelect?.()
                                     setOpen(false)
                                   }}
                                   title={[option.label, option.meta].filter(Boolean).join(" - ")}
@@ -216,6 +222,7 @@ function DropdownControl(props: {
                         )}
                         onClick={() => {
                           props.onChange(option.value)
+                          props.onSelect?.()
                           setOpen(false)
                         }}
                         title={[option.label, option.meta].filter(Boolean).join(" - ")}
@@ -240,8 +247,53 @@ function DropdownControl(props: {
   )
 }
 
+function ComposerMoreMenu(props: { children: (close: () => void) => ReactNode; disabled?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = () => setOpen(false)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener("pointerdown", close)
+    return () => document.removeEventListener("pointerdown", close)
+  }, [open])
+
+  return (
+    <div
+      ref={ref}
+      className="relative shrink-0"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setOpen(false)
+      }}
+    >
+      <button
+        type="button"
+        className={cn(
+          "flex size-8 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-50",
+          open && "bg-zinc-100 text-zinc-800",
+        )}
+        disabled={props.disabled}
+        title="More options"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+      {open ? (
+        <div className="absolute bottom-full right-0 z-20 mb-2 flex w-52 flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-xl shadow-zinc-950/10">
+          {props.children(close)}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function Composer(props: ComposerProps) {
   const [text, setText] = useState("")
+  const [compactControls, setCompactControls] = useState(false)
+  const composerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const textareaLineHeightPx = 14 * 1.7
 
@@ -257,6 +309,20 @@ export function Composer(props: ComposerProps) {
     textarea.style.height = `${nextHeight}px`
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"
   }, [text])
+
+  useLayoutEffect(() => {
+    const composer = composerRef.current
+    if (!composer) return
+
+    const updateCompactControls = () => {
+      setCompactControls(composer.getBoundingClientRect().width < compactComposerControlsWidth)
+    }
+
+    updateCompactControls()
+    const observer = new ResizeObserver(updateCompactControls)
+    observer.observe(composer)
+    return () => observer.disconnect()
+  }, [])
 
   const modelGroups = useMemo(() => {
     const groups = new Map<string, DropdownOption[]>()
@@ -290,7 +356,7 @@ export function Composer(props: ComposerProps) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 px-[calc(0.875rem+(var(--chat-scrollbar-width)-2px)/2)] pb-5 pt-10">
-      <div className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-[#fbfbfa] p-3 shadow-lg shadow-zinc-950/10">
+      <div ref={composerRef} className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-[#fbfbfa] p-3 shadow-lg shadow-zinc-950/10">
         <textarea
           ref={textareaRef}
           className="composer-textarea resize-none overflow-hidden bg-transparent px-2 py-0.5 text-zinc-900 outline-none placeholder:text-zinc-400"
@@ -316,49 +382,109 @@ export function Composer(props: ComposerProps) {
             <Plus className="size-4 stroke-[2.2]" />
           </Button>
           <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
-            <DropdownControl
-              icon={<Bot className="size-3.5 shrink-0" />}
-              label="Agent"
-              value={props.selectedAgent}
-              placeholder={props.agentLoading ? "Loading agents..." : "No primary agents"}
-              disabled={props.disabled || props.agentLoading || props.agents.length === 0}
-              menuWidth="w-48"
-              showMeta={false}
-              onChange={props.onAgentChange}
-              options={props.agents.map((agent) => ({
-                value: agent.name,
-                label: formatAgentName(agent.name),
-                meta: agent.description,
-              }))}
-            />
-            <DropdownControl
-              icon={<Brain className="size-3.5 shrink-0" />}
-              label="Model"
-              value={props.selectedModel}
-              placeholder={props.modelLoading ? "Loading models..." : "No configured models"}
-              disabled={props.disabled || props.modelLoading || props.modelOptions.length === 0}
-              searchable
-              menuWidth="w-56"
-              showMeta={false}
-              groups={modelGroups}
-              onChange={props.onModelChange}
-              options={modelGroups.flatMap((g) => g.options)}
-            />
-            {props.variantOptions.length > 2 ? (
-              <DropdownControl
-                icon={<Zap className="size-3.5 shrink-0" />}
-                label="Reasoning"
-                value={props.selectedVariant ?? "default"}
-                placeholder="Default"
-                disabled={props.disabled}
-                menuWidth="w-40"
-                onChange={(value) => props.onVariantChange(value === "default" ? null : value)}
-                options={props.variantOptions.map((variant) => ({
-                  value: variant,
-                  label: formatVariantName(variant),
-                }))}
-              />
-            ) : null}
+            {!compactControls ? (
+              <>
+                <DropdownControl
+                  icon={<Bot className="size-3.5 shrink-0" />}
+                  label="Agent"
+                  value={props.selectedAgent}
+                  placeholder={props.agentLoading ? "Loading agents..." : "No primary agents"}
+                  disabled={props.disabled || props.agentLoading || props.agents.length === 0}
+                  menuWidth="w-48"
+                  showMeta={false}
+                  onChange={props.onAgentChange}
+                  options={props.agents.map((agent) => ({
+                    value: agent.name,
+                    label: formatAgentName(agent.name),
+                    meta: agent.description,
+                  }))}
+                />
+                <DropdownControl
+                  icon={<Brain className="size-3.5 shrink-0" />}
+                  label="Model"
+                  value={props.selectedModel}
+                  placeholder={props.modelLoading ? "Loading models..." : "No configured models"}
+                  disabled={props.disabled || props.modelLoading || props.modelOptions.length === 0}
+                  searchable
+                  menuWidth="w-56"
+                  showMeta={false}
+                  groups={modelGroups}
+                  onChange={props.onModelChange}
+                  options={modelGroups.flatMap((g) => g.options)}
+                />
+                {props.variantOptions.length > 2 ? (
+                  <DropdownControl
+                    icon={<Zap className="size-3.5 shrink-0" />}
+                    label="Reasoning"
+                    value={props.selectedVariant ?? "default"}
+                    placeholder="Default"
+                    disabled={props.disabled}
+                    menuWidth="w-40"
+                    onChange={(value) => props.onVariantChange(value === "default" ? null : value)}
+                    options={props.variantOptions.map((variant) => ({
+                      value: variant,
+                      label: formatVariantName(variant),
+                    }))}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <ComposerMoreMenu disabled={props.disabled}>
+                {(close) => (
+                  <>
+                    <DropdownControl
+                      icon={<Bot className="size-3.5 shrink-0" />}
+                      label="Agent"
+                      value={props.selectedAgent}
+                      placeholder={props.agentLoading ? "Loading agents..." : "No primary agents"}
+                      disabled={props.disabled || props.agentLoading || props.agents.length === 0}
+                      menuWidth="w-48"
+                      showMeta={false}
+                      buttonClassName="w-full max-w-none justify-start"
+                      onChange={props.onAgentChange}
+                      onSelect={close}
+                      options={props.agents.map((agent) => ({
+                        value: agent.name,
+                        label: formatAgentName(agent.name),
+                        meta: agent.description,
+                      }))}
+                    />
+                    <DropdownControl
+                      icon={<Brain className="size-3.5 shrink-0" />}
+                      label="Model"
+                      value={props.selectedModel}
+                      placeholder={props.modelLoading ? "Loading models..." : "No configured models"}
+                      disabled={props.disabled || props.modelLoading || props.modelOptions.length === 0}
+                      searchable
+                      menuWidth="w-56"
+                      showMeta={false}
+                      groups={modelGroups}
+                      buttonClassName="w-full max-w-none justify-start"
+                      onChange={props.onModelChange}
+                      onSelect={close}
+                      options={modelGroups.flatMap((g) => g.options)}
+                    />
+                    {props.variantOptions.length > 2 ? (
+                      <DropdownControl
+                        icon={<Zap className="size-3.5 shrink-0" />}
+                        label="Reasoning"
+                        value={props.selectedVariant ?? "default"}
+                        placeholder="Default"
+                        disabled={props.disabled}
+                        menuWidth="w-40"
+                        buttonClassName="w-full max-w-none justify-start"
+                        onChange={(value) => props.onVariantChange(value === "default" ? null : value)}
+                        onSelect={close}
+                        options={props.variantOptions.map((variant) => ({
+                          value: variant,
+                          label: formatVariantName(variant),
+                        }))}
+                      />
+                    ) : null}
+                  </>
+                )}
+              </ComposerMoreMenu>
+            )}
             <Button
               type="button"
               className="size-8 shrink-0 rounded-full bg-zinc-900 px-0 text-white shadow-sm shadow-zinc-950/10 hover:bg-zinc-700 disabled:bg-zinc-300 disabled:text-zinc-500 disabled:shadow-none"
