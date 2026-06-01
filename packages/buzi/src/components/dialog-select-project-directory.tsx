@@ -275,16 +275,16 @@ export function DialogSelectProjectDirectory(props: {
   const active = items[activeIndex]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-zinc-950/25 px-4 pt-[12vh] backdrop-blur-[2px]">
-      <div className="flex h-[min(560px,76vh)] w-full max-w-[600px] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-[#f7f7f5] shadow-2xl shadow-zinc-950/20">
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200/80 px-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-zinc-950/20 px-4 pt-[12vh] backdrop-blur-[2px]">
+      <div className="flex h-[min(560px,76vh)] w-full max-w-[600px] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl shadow-zinc-950/15">
+        <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 px-4">
           <div className="text-sm font-semibold text-zinc-950">Add Project</div>
-          <button className="flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-white hover:text-zinc-950" onClick={props.onClose}>
+          <button className="flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950" onClick={props.onClose}>
             <X className="size-4" />
           </button>
         </div>
-        <div className="border-b border-zinc-200/80 p-3">
-          <div className="flex h-9 items-center gap-2 rounded-md bg-white px-2.5 text-zinc-500 ring-1 ring-zinc-200/80 focus-within:ring-zinc-400">
+        <div className="border-b border-zinc-200 p-3">
+          <div className="flex h-9 items-center gap-2 rounded-md bg-zinc-50 px-2.5 text-zinc-500 ring-1 ring-zinc-200 focus-within:ring-zinc-400">
             <Search className="size-4 shrink-0" />
             <input
               ref={inputRef}
@@ -338,7 +338,7 @@ export function DialogSelectProjectDirectory(props: {
                       key={`${row.group}:${row.absolute}`}
                       className={cn(
                         "flex h-10 w-full items-center gap-2 rounded-md px-2 text-left transition-colors",
-                        activeIndex === index ? "bg-white text-zinc-950" : "text-zinc-700 hover:bg-white/70",
+                        activeIndex === index ? "bg-zinc-50 text-zinc-950" : "text-zinc-700 hover:bg-zinc-50",
                       )}
                       onMouseEnter={() => setActiveIndex(index)}
                       onClick={() => select(row)}

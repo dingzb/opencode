@@ -356,7 +356,7 @@ export function Composer(props: ComposerProps) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 px-[calc(0.875rem+(var(--chat-scrollbar-width)-2px)/2)] pb-5 pt-10">
-      <div ref={composerRef} className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-[#fbfbfa] p-3 shadow-lg shadow-zinc-950/10">
+      <div ref={composerRef} className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-white p-3 shadow-lg shadow-zinc-950/10">
         <textarea
           ref={textareaRef}
           className="composer-textarea resize-none overflow-hidden bg-transparent px-2 py-0.5 text-zinc-900 outline-none placeholder:text-zinc-400"

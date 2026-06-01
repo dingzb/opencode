@@ -5,7 +5,7 @@ import { createOpencodeSdk } from "./lib/opencode"
 import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
-import { LeftSidebar, RightInspector, type SidebarPanel, TitleBar } from "./components/app-shell"
+import { LeftSidebar, RightInspector, ServerManagerDialog, type ServerConfig, type SidebarPanel, TitleBar } from "./components/app-shell"
 import { ProjectsPanel } from "./components/projects"
 import { DialogSelectProjectDirectory } from "./components/dialog-select-project-directory"
 import { MessageTimeline } from "./components/message-timeline"
@@ -14,8 +14,11 @@ import { ProjectWelcome } from "./components/project-welcome"
 import { AppFrame } from "./shell/app-frame"
 import { setWindowTitle } from "./runtime/window-actions"
 import type { BuziProject } from "./types/project"
+import buziLogo from "./assets/buzi-logo.png"
 
-const serverUrl = "http://localhost:4096"
+const defaultServer: ServerConfig = { id: "http://localhost:4096", name: "Local opencode", url: "http://localhost:4096" }
+const serversStorageKey = "buzi:servers:v1"
+const activeServerStorageKey = "buzi:active-server:v1"
 const selectedModelStoragePrefix = "buzi:model-selection:"
 const selectedVariantStoragePrefix = "buzi:model-variant:"
 const selectedVariantDefaultValue = "__default__"
@@ -34,6 +37,54 @@ type ModelOption = {
 type ActiveRoute = {
   projectID?: string
   sessionID?: string | null
+}
+
+function normalizeServerUrl(value: string) {
+  const trimmed = value.trim().replace(/\/+$/, "")
+  if (!trimmed) return defaultServer.url
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
+  return `http://${trimmed}`
+}
+
+function serverName(url: string) {
+  const withoutProtocol = url.replace(/^https?:\/\//, "")
+  return withoutProtocol === "localhost:4096" ? "Local opencode" : withoutProtocol
+}
+
+function serverConfig(url: string): ServerConfig {
+  const normalized = normalizeServerUrl(url)
+  return { id: normalized, name: serverName(normalized), url: normalized }
+}
+
+function isStoredServer(value: unknown): value is ServerConfig {
+  if (!value || typeof value !== "object") return false
+  const item = value as Partial<ServerConfig>
+  return typeof item.id === "string" && typeof item.name === "string" && typeof item.url === "string" && !!item.url
+}
+
+function readServers() {
+  try {
+    const value = window.localStorage.getItem(serversStorageKey)
+    const parsed: unknown = value ? JSON.parse(value) : [defaultServer]
+    if (!Array.isArray(parsed)) return [defaultServer]
+    const stored = parsed.filter(isStoredServer).map((server) => serverConfig(server.url))
+    return stored.some((server) => server.id === defaultServer.id) ? stored : [defaultServer, ...stored]
+  } catch {
+    return [defaultServer]
+  }
+}
+
+function writeServers(servers: ServerConfig[]) {
+  window.localStorage.setItem(serversStorageKey, JSON.stringify(servers))
+}
+
+function readActiveServerID(servers: ServerConfig[]) {
+  const id = window.localStorage.getItem(activeServerStorageKey)
+  return servers.some((server) => server.id === id) ? id : servers[0].id
+}
+
+function writeActiveServerID(serverID: string) {
+  window.localStorage.setItem(activeServerStorageKey, serverID)
 }
 
 function modelValue(providerID: string, modelID: string) {
@@ -202,8 +253,11 @@ function useMediaQuery(query: string) {
 
 export function App() {
   const queryClient = useQueryClient()
+  const [initialServers] = useState(readServers)
   const [initialRoute] = useState(readActiveRoute)
-  const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
+  const [servers, setServers] = useState<ServerConfig[]>(initialServers)
+  const [activeServerID, setActiveServerID] = useState(() => readActiveServerID(initialServers))
+  const [serverManagerOpen, setServerManagerOpen] = useState(false)
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("conversations")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(false)
@@ -229,7 +283,6 @@ export function App() {
     activeSessionID: initialRoute.sessionID,
   })
 
-  const globalSdk = useMemo(() => createOpencodeSdk({ serverUrl }), [])
   const activeProject = activeProjectID
     ? projects.find((project) => project.id === activeProjectID)
     : undefined
@@ -237,21 +290,25 @@ export function App() {
     ? state.sessions.find((session) => session.id === state.activeSessionID)
     : undefined
   const activeDirectory = activeSession?.directory ?? activeProject?.worktree
-  const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory: activeDirectory }), [activeDirectory])
+  const activeServer = servers.find((server) => server.id === activeServerID) ?? servers[0] ?? defaultServer
+  const serverUrl = activeServer.url
+  const globalSdk = useMemo(() => createOpencodeSdk({ serverUrl }), [serverUrl])
+  const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory: activeDirectory }), [activeDirectory, serverUrl])
   const enabled = Boolean(activeDirectory)
 
   const health = useQuery({
-    queryKey: ["health"],
+    queryKey: ["health", serverUrl],
     queryFn: async () => {
       const result = await globalSdk.global.health()
       return result.data
     },
-    refetchInterval: 10_000,
+    refetchInterval: (query) => query.state.data?.healthy === true ? 10_000 : 2_000,
+    retry: false,
   })
 
   const sessions = useQuery({
-    queryKey: ["sessions", projects.map((project) => `${project.id}:${project.worktree}`).join("|")],
-    enabled: projects.length > 0,
+    queryKey: ["sessions", serverUrl, projects.map((project) => `${project.id}:${project.worktree}`).join("|")],
+    enabled: health.data?.healthy === true && projects.length > 0,
     queryFn: async () => {
       const next = (
         await Promise.all(
@@ -267,7 +324,8 @@ export function App() {
   })
 
   const recentProjects = useQuery({
-    queryKey: ["recent-projects"],
+    queryKey: ["recent-projects", serverUrl],
+    enabled: health.data?.healthy === true,
     queryFn: async () => {
       const result = await globalSdk.project.list()
       return result.data ?? []
@@ -275,8 +333,8 @@ export function App() {
   })
 
   const messages = useQuery({
-    queryKey: ["messages", activeDirectory, state.activeSessionID],
-    enabled: enabled && Boolean(state.activeSessionID),
+    queryKey: ["messages", serverUrl, activeDirectory, state.activeSessionID],
+    enabled: health.data?.healthy === true && enabled && Boolean(state.activeSessionID),
     queryFn: async () => {
       const sessionID = state.activeSessionID!
       const result = await sdk.session.messages({ sessionID, limit: 120 })
@@ -287,8 +345,8 @@ export function App() {
   })
 
   useQuery({
-    queryKey: ["session-status", activeDirectory],
-    enabled,
+    queryKey: ["session-status", serverUrl, activeDirectory],
+    enabled: health.data?.healthy === true && enabled,
     queryFn: async () => {
       const result = await sdk.session.status()
       dispatch({ type: "session.status.loaded", statuses: result.data ?? {} })
@@ -297,8 +355,8 @@ export function App() {
   })
 
   const providers = useQuery({
-    queryKey: ["providers", activeDirectory],
-    enabled,
+    queryKey: ["providers", serverUrl, activeDirectory],
+    enabled: health.data?.healthy === true && enabled,
     queryFn: async () => {
       const result = await sdk.provider.list()
       return result.data
@@ -306,8 +364,8 @@ export function App() {
   })
 
   const agents = useQuery({
-    queryKey: ["agents", activeDirectory],
-    enabled,
+    queryKey: ["agents", serverUrl, activeDirectory],
+    enabled: health.data?.healthy === true && enabled,
     queryFn: async () => {
       const result = await sdk.app.agents()
       return result.data ?? []
@@ -352,14 +410,23 @@ export function App() {
       }
     }
   }, [activeMessages])
+  const handleEventStatus = useCallback(() => {}, [])
 
   useOpencodeEvents({
     sdk: globalSdk,
     directory: activeDirectory ?? "",
     dispatch,
-    enabled,
-    onStatus: setStatus,
+    enabled: health.data?.healthy === true && enabled,
+    onStatus: handleEventStatus,
   })
+
+  useEffect(() => {
+    writeServers(servers)
+  }, [servers])
+
+  useEffect(() => {
+    writeActiveServerID(activeServer.id)
+  }, [activeServer.id])
 
   useEffect(() => {
     writeProjects(projects)
@@ -540,7 +607,7 @@ export function App() {
         throw error
       })
     void queryClient.invalidateQueries({ queryKey: ["sessions"] })
-  }, [queryClient])
+  }, [queryClient, serverUrl])
 
   const closeProject = useCallback((project: BuziProject) => {
     setProjects((current) => current.filter((item) => item.id !== project.id && item.worktree !== project.worktree))
@@ -572,7 +639,7 @@ export function App() {
       void queryClient.invalidateQueries({ queryKey: ["sessions"] })
       void queryClient.invalidateQueries({ queryKey: ["recent-projects"] })
     },
-    [queryClient],
+    [queryClient, serverUrl],
   )
 
   const submit = useCallback(
@@ -665,10 +732,15 @@ export function App() {
     state.sessionStatus,
   ])
   const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
-  const connected = health.data?.healthy === true && (!enabled || status === "connected")
-  const serverState = health.isError ? "error" : connected ? "connected" : "connecting"
+  const serverConnected = health.data?.healthy === true
+  const serverState = health.isError ? "error" : serverConnected ? "connected" : "connecting"
   const title = activeSession ? sessionTitle(activeSession) : activeProject ? "New chat" : "Welcome"
   const windowTitle = [title, activeDirectory].filter(Boolean).join(" - ") || "Buzi"
+  const addServer = useCallback((url: string) => {
+    const server = serverConfig(url)
+    setServers((current) => current.some((item) => item.id === server.id) ? current : [...current, server])
+    setActiveServerID(server.id)
+  }, [])
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((open) => {
       if (isPhoneOverlayLayout && !open) setInspectorOpen(false)
@@ -681,6 +753,7 @@ export function App() {
       return !open
     })
   }, [isPhoneOverlayLayout])
+  const manageServers = useCallback(() => setServerManagerOpen(true), [])
 
   useEffect(() => {
     if (!shouldAutoHideSidebars) return
@@ -707,11 +780,13 @@ export function App() {
   useEffect(() => {
     window.addEventListener("buzi:toggle-sidebar", toggleSidebar)
     window.addEventListener("buzi:toggle-inspector", toggleInspector)
+    window.addEventListener("buzi:manage-servers", manageServers)
     return () => {
       window.removeEventListener("buzi:toggle-sidebar", toggleSidebar)
       window.removeEventListener("buzi:toggle-inspector", toggleInspector)
+      window.removeEventListener("buzi:manage-servers", manageServers)
     }
-  }, [toggleInspector, toggleSidebar])
+  }, [manageServers, toggleInspector, toggleSidebar])
 
   return (
     <AppFrame>
@@ -732,109 +807,148 @@ export function App() {
                 nativeTitleBar={frameSlots.nativeTitleBar}
                 onToggleSidebar={toggleSidebar}
                 onToggleInspector={toggleInspector}
+                onManageServers={manageServers}
               />
             ) : null}
-            <div className="flex min-h-0 flex-1">
-              {sidebarOpen ? (
-                <button
-                  className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
-                  aria-label="Close sidebar overlay"
-                  onClick={() => setSidebarOpen(false)}
-                />
-              ) : null}
-              <LeftSidebar
-                activePanel={activeSidebarPanel}
-                open={sidebarOpen}
-                overlayActive={sidebarOpen && !inspectorOpen}
-                width={sidebarWidth}
-                onPanelChange={setActiveSidebarPanel}
-                onResize={setSidebarWidth}
-                conversations={
-                  <ProjectsPanel
-                    projects={projects}
-                    sessions={state.sessions}
-                    directory={activeDirectory}
-                    activeSessionID={state.activeSessionID ?? undefined}
-                    titleForSession={sessionTitle}
-                    isSessionBusy={isSessionBusy}
-                    onSelect={handleSessionSelect}
-                    onArchiveSession={archiveSession}
-                    onNewSession={createSession}
-                    onCloseProject={closeProject}
-                    onAddProject={() => setProjectDialogOpen(true)}
-                    query={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    loading={sessions.isLoading}
+            {!serverConnected ? (
+              <ServerStartup serverUrl={serverUrl} state={serverState} onManageServers={manageServers} />
+            ) : (
+              <div className="flex min-h-0 flex-1">
+                {sidebarOpen ? (
+                  <button
+                    className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
+                    aria-label="Close sidebar overlay"
+                    onClick={() => setSidebarOpen(false)}
                   />
-                }
-              />
-              <section className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden bg-[#fbfbfa]">
-                {health.isError ? (
-                  <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    Could not connect to opencode at <span className="font-mono">http://localhost:4096</span>.
-                  </div>
                 ) : null}
-                {!activeProject ? (
-                  <ProjectWelcome
-                    recentProjects={recentProjects.data}
-                    loading={recentProjects.isLoading}
-                    onAddProject={() => setProjectDialogOpen(true)}
-                    onOpenProject={addProject}
-                  />
-                ) : (
-                  <>
-                    <MessageTimeline
-                      messages={activeMessages}
-                      parts={state.parts}
-                      loading={state.activeSessionID !== null && (messages.isLoading || sessions.isLoading)}
-                      providers={providers.data?.all}
+                <LeftSidebar
+                  activePanel={activeSidebarPanel}
+                  open={sidebarOpen}
+                  overlayActive={sidebarOpen && !inspectorOpen}
+                  width={sidebarWidth}
+                  onPanelChange={setActiveSidebarPanel}
+                  onResize={setSidebarWidth}
+                  conversations={
+                    <ProjectsPanel
+                      projects={projects}
+                      sessions={state.sessions}
+                      directory={activeDirectory}
+                      activeSessionID={state.activeSessionID ?? undefined}
+                      titleForSession={sessionTitle}
+                      isSessionBusy={isSessionBusy}
+                      onSelect={handleSessionSelect}
+                      onArchiveSession={archiveSession}
+                      onNewSession={createSession}
+                      onCloseProject={closeProject}
+                      onAddProject={() => setProjectDialogOpen(true)}
+                      query={searchQuery}
+                      onSearchChange={setSearchQuery}
+                      loading={sessions.isLoading}
                     />
-                    <Composer
-                      disabled={!enabled || health.isError}
-                      working={activeSessionStatus?.type === "busy"}
-                      stopping={stoppingSessionID === state.activeSessionID}
-                      modelOptions={modelOptions}
-                      selectedModel={selectedModelValue}
-                      onModelChange={handleModelChange}
-                      variantOptions={variantOptions}
-                      selectedVariant={currentVariant}
-                      onVariantChange={handleVariantChange}
-                      modelLoading={providers.isLoading}
-                      agents={primaryAgents}
-                      selectedAgent={selectedAgent}
-                      onAgentChange={setSelectedAgent}
-                      agentLoading={agents.isLoading}
-                      onSubmit={submit}
-                      onStop={stop}
-                    />
-                  </>
-                )}
-              </section>
-              {inspectorOpen ? (
-                <button
-                  className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
-                  aria-label="Close inspector overlay"
-                  onClick={() => setInspectorOpen(false)}
+                  }
                 />
-              ) : null}
-              <RightInspector
-                open={inspectorOpen}
-                overlayActive={inspectorOpen}
-                width={inspectorWidth}
-                onClose={() => setInspectorOpen(false)}
-                onResize={setInspectorWidth}
-              />
-            </div>
+                <section className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden bg-zinc-50">
+                  {!activeProject ? (
+                    <ProjectWelcome
+                      recentProjects={recentProjects.data}
+                      loading={recentProjects.isLoading}
+                      onAddProject={() => setProjectDialogOpen(true)}
+                      onOpenProject={addProject}
+                    />
+                  ) : (
+                    <>
+                      <MessageTimeline
+                        messages={activeMessages}
+                        parts={state.parts}
+                        loading={state.activeSessionID !== null && (messages.isLoading || sessions.isLoading)}
+                        providers={providers.data?.all}
+                      />
+                      <Composer
+                        disabled={!enabled || !serverConnected}
+                        working={activeSessionStatus?.type === "busy"}
+                        stopping={stoppingSessionID === state.activeSessionID}
+                        modelOptions={modelOptions}
+                        selectedModel={selectedModelValue}
+                        onModelChange={handleModelChange}
+                        variantOptions={variantOptions}
+                        selectedVariant={currentVariant}
+                        onVariantChange={handleVariantChange}
+                        modelLoading={providers.isLoading}
+                        agents={primaryAgents}
+                        selectedAgent={selectedAgent}
+                        onAgentChange={setSelectedAgent}
+                        agentLoading={agents.isLoading}
+                        onSubmit={submit}
+                        onStop={stop}
+                      />
+                    </>
+                  )}
+                </section>
+                {inspectorOpen ? (
+                  <button
+                    className="fixed inset-0 top-12 z-20 bg-zinc-950/20 backdrop-blur-[1px] md:hidden"
+                    aria-label="Close inspector overlay"
+                    onClick={() => setInspectorOpen(false)}
+                  />
+                ) : null}
+                <RightInspector
+                  open={inspectorOpen}
+                  overlayActive={inspectorOpen}
+                  width={inspectorWidth}
+                  onClose={() => setInspectorOpen(false)}
+                  onResize={setInspectorWidth}
+                />
+              </div>
+            )}
           </main>
-          <DialogSelectProjectDirectory
-            open={projectDialogOpen}
-            sdk={globalSdk}
-            projects={projects}
-            onClose={() => setProjectDialogOpen(false)}
-            onSelect={addProject}
+          {serverConnected ? (
+            <DialogSelectProjectDirectory
+              open={projectDialogOpen}
+              sdk={globalSdk}
+              projects={projects}
+              onClose={() => setProjectDialogOpen(false)}
+              onSelect={addProject}
+            />
+          ) : null}
+          <ServerManagerDialog
+            open={serverManagerOpen}
+            servers={servers}
+            activeServerID={activeServer.id}
+            connectingServerURL={serverUrl}
+            serverState={serverState}
+            onActivate={setActiveServerID}
+            onAdd={addServer}
+            onClose={() => setServerManagerOpen(false)}
           />
         </>
       )}
     </AppFrame>
+  )
+}
+
+function ServerStartup(props: {
+  serverUrl: string
+  state: "connected" | "connecting" | "error"
+  onManageServers: () => void
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-zinc-50 px-6">
+      <div className="flex w-full max-w-sm flex-col items-center text-center">
+        <img className="h-auto w-48 select-none" src={buziLogo} alt="Buzi" />
+        <div className="mt-8 h-2 w-full overflow-hidden rounded-full bg-zinc-200">
+          <div className="h-full w-1/2 animate-[buzi-boot_1.4s_ease-in-out_infinite] rounded-full bg-zinc-900" />
+        </div>
+        <div className="mt-4 text-sm font-semibold text-zinc-950">
+          {props.state === "error" ? "Waiting for server" : "Starting server"}
+        </div>
+        <div className="mt-1 max-w-full truncate font-mono text-xs text-zinc-500">{props.serverUrl}</div>
+        <button
+          className="mt-5 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+          onClick={props.onManageServers}
+        >
+          Manage servers
+        </button>
+      </div>
+    </div>
   )
 }

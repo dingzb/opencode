@@ -10,6 +10,7 @@ import {
   Blocks,
   BookOpen,
   CircleHelp,
+  CheckCircle2,
   FolderKanban,
   Folders,
   Menu,
@@ -21,11 +22,18 @@ import {
   PanelRightClose,
   Server,
   Settings,
+  Plus,
+  X,
 } from "lucide-react"
 import { cn } from "../lib/utils"
 import { startWindowDrag, toggleMaximizeWindow } from "../runtime/window-actions"
 
 export type SidebarPanel = "conversations" | "projects" | "plugins" | "knowledge" | "settings" | "help"
+export type ServerConfig = {
+  id: string
+  name: string
+  url: string
+}
 
 const sidebarPanels: Array<{ id: SidebarPanel; label: string; icon: typeof MessageCircle }> = [
   { id: "projects", label: "Projects", icon: FolderKanban },
@@ -55,6 +63,7 @@ export function TitleBar(props: {
   nativeTitleBar?: boolean
   onToggleSidebar: () => void
   onToggleInspector: () => void
+  onManageServers: () => void
 }) {
   const suppressNextTitleBarClick = useRef(false)
   const suppressNextTitleBarClickTimeout = useRef<number | undefined>(undefined)
@@ -220,6 +229,7 @@ export function TitleBar(props: {
           <button
             className="relative flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
             title="Configure server"
+            onClick={props.onManageServers}
           >
             <Server className="size-4" />
             <span
@@ -248,6 +258,150 @@ export function TitleBar(props: {
         </div>
       </div>
     </header>
+  )
+}
+
+export function ServerManagerDialog(props: {
+  open: boolean
+  servers: ServerConfig[]
+  activeServerID: string
+  connectingServerURL: string
+  serverState: "connected" | "connecting" | "error"
+  onActivate: (serverID: string) => void
+  onAdd: (url: string) => void
+  onClose: () => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [url, setUrl] = useState("")
+  const activeServer = props.servers.find((server) => server.id === props.activeServerID) ?? props.servers[0]
+  const availableServers = props.servers.filter((server) => server.id !== activeServer?.id)
+
+  if (!props.open) return null
+
+  const submit = () => {
+    const value = url.trim()
+    if (!value) return
+    props.onAdd(value)
+    setUrl("")
+    setAdding(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-zinc-950/20 px-4 pt-20 backdrop-blur-[2px]">
+      <button className="absolute inset-0 cursor-default" aria-label="Close server manager" onClick={props.onClose} />
+      <div className="relative flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl shadow-zinc-950/15">
+        <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4">
+          <div className="text-sm font-semibold text-zinc-950">Server manager</div>
+          <button
+            className="flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
+            title="Close"
+            aria-label="Close server manager"
+            onClick={props.onClose}
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="space-y-4 p-4">
+          <div>
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Connecting</div>
+            <ServerRow
+              server={activeServer}
+              state={props.serverState}
+              active
+              connectingServerURL={props.connectingServerURL}
+            />
+          </div>
+          <div>
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Available servers</div>
+            <div className="space-y-2">
+              {availableServers.length > 0 ? (
+                availableServers.map((server) => (
+                  <ServerRow
+                    key={server.id}
+                    server={server}
+                    state="connecting"
+                    connectingServerURL={props.connectingServerURL}
+                    action={
+                      <button
+                        className="rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                        onClick={() => props.onActivate(server.id)}
+                      >
+                        Connect
+                      </button>
+                    }
+                  />
+                ))
+              ) : (
+                <div className="rounded-md border border-dashed border-zinc-200 px-3 py-4 text-center text-xs text-zinc-500">
+                  No other servers configured.
+                </div>
+              )}
+            </div>
+          </div>
+          {adding ? (
+            <div className="flex gap-2">
+              <input
+                className="min-w-0 flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none ring-zinc-300 focus:ring-2"
+                autoFocus
+                placeholder="http://localhost:4096"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submit()
+                  if (event.key === "Escape") setAdding(false)
+                }}
+              />
+              <button className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white" onClick={submit}>
+                Add
+              </button>
+            </div>
+          ) : (
+            <button
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              onClick={() => setAdding(true)}
+            >
+              <Plus className="size-4" />
+              Add server
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ServerRow(props: {
+  server?: ServerConfig
+  state: "connected" | "connecting" | "error"
+  active?: boolean
+  connectingServerURL: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <Server className="size-4 shrink-0 text-zinc-500" />
+          <div className="truncate text-sm font-medium text-zinc-950">{props.server?.name ?? "No server"}</div>
+          {props.active ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600" /> : null}
+        </div>
+        <div className="mt-0.5 truncate font-mono text-[11px] text-zinc-500">
+          {props.server?.url ?? props.connectingServerURL}
+        </div>
+      </div>
+      {props.action ?? (
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-1 text-[11px] font-medium",
+            props.state === "connected" && "bg-emerald-100 text-emerald-700",
+            props.state === "connecting" && "bg-amber-100 text-amber-700",
+            props.state === "error" && "bg-red-100 text-red-700",
+          )}
+        >
+          {props.state === "connected" ? "Connected" : props.state === "error" ? "Offline" : "Starting"}
+        </span>
+      )}
+    </div>
   )
 }
 

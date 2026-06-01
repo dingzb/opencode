@@ -65,7 +65,6 @@ fn build_window(app: &adw::Application) {
 
     let status = gtk::Button::builder()
         .tooltip_text("Server status")
-        .sensitive(false)
         .build();
     status.set_child(Some(&status_overlay));
     status.add_css_class("flat");
@@ -88,6 +87,11 @@ fn build_window(app: &adw::Application) {
     webview.set_hexpand(true);
     webview.set_vexpand(true);
     webview.load_uri(DEV_URL);
+
+    status.connect_clicked({
+        let webview = webview.clone();
+        move |_| dispatch_web_event(&webview, "buzi:manage-servers")
+    });
 
     header.pack_start(&header_button(
         "sidebar-show-symbolic",

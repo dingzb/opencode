@@ -118,6 +118,20 @@ input {
   margin: -0.5rem -0.75rem -0.5rem 0.25rem;
 }
 
+@keyframes buzi-boot {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  55% {
+    transform: translateX(55%);
+  }
+
+  100% {
+    transform: translateX(210%);
+  }
+}
+
 .composer-control {
   font-size: 11px;
 }
