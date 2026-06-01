@@ -33,6 +33,11 @@ function toAction(event: Event): ChatAction | undefined {
         field: event.properties.field,
         delta: event.properties.delta,
       }
+    case "question.asked":
+      return { type: "question.upsert", request: event.properties }
+    case "question.replied":
+    case "question.rejected":
+      return { type: "question.remove", sessionID: event.properties.sessionID, requestID: event.properties.requestID }
   }
 }
 

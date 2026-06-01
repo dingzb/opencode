@@ -31,6 +31,7 @@ const initial: ChatState = {
   temporaryTitles: {},
   messages: {},
   parts: {},
+  question: {},
 }
 
 test("chatReducer keeps a newer session update when an older list load finishes later", () => {

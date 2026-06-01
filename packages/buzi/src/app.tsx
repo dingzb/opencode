@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import type { Agent, Model, Project, Session } from "@opencode-ai/sdk/v2/client"
+import type { Agent, Model, Project, QuestionAnswer, QuestionRequest, Session } from "@opencode-ai/sdk/v2/client"
 import { createOpencodeSdk } from "./lib/opencode"
 import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
+import { sessionQuestionRequest } from "./lib/session-request-tree"
 import { LeftSidebar, RightInspector, ServerManagerDialog, type ServerConfig, type SidebarPanel, TitleBar } from "./components/app-shell"
 import { ChatsPanel } from "./components/chats"
 import { DialogSelectProjectDirectory } from "./components/dialog-select-project-directory"
@@ -291,6 +292,7 @@ export function App() {
   const [composerDraft, setComposerDraft] = useState("")
   const composerDraftKeyRef = useRef<string | undefined>(undefined)
   const [stoppingSessionID, setStoppingSessionID] = useState<string>()
+  const [questionSubmittingID, setQuestionSubmittingID] = useState<string>()
   const [projects, setProjects] = useState<BuziProject[]>(readProjects)
   const [activeProjectID, setActiveProjectID] = useState(initialRoute.projectID)
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
@@ -301,6 +303,7 @@ export function App() {
     temporaryTitles: {},
     messages: {},
     parts: {},
+    question: {},
     activeSessionID: initialRoute.sessionID,
   })
 
@@ -379,6 +382,16 @@ export function App() {
     },
   })
 
+  useQuery({
+    queryKey: ["questions", serverUrl, activeDirectory],
+    enabled: health.data?.healthy === true && enabled,
+    queryFn: async () => {
+      const result = await sdk.question.list()
+      dispatch({ type: "question.loaded", directory: activeDirectory!, items: result.data ?? [] })
+      return result.data
+    },
+  })
+
   const providers = useQuery({
     queryKey: ["providers", serverUrl, activeDirectory],
     enabled: health.data?.healthy === true && enabled,
@@ -435,7 +448,10 @@ export function App() {
       }
     }
   }, [activeMessages])
-  const handleEventStatus = useCallback(() => {}, [])
+  const handleEventStatus = useCallback((status: "connecting" | "connected" | "disconnected") => {
+    if (status !== "connected") return
+    void queryClient.invalidateQueries({ queryKey: ["questions", serverUrl, activeDirectory] })
+  }, [activeDirectory, queryClient, serverUrl])
 
   useOpencodeEvents({
     sdk: globalSdk,
@@ -585,6 +601,7 @@ export function App() {
     void queryClient.invalidateQueries({ queryKey: ["health"] })
     void queryClient.invalidateQueries({ queryKey: ["sessions"] })
     void queryClient.invalidateQueries({ queryKey: ["session-status"] })
+    void queryClient.invalidateQueries({ queryKey: ["questions"] })
     void queryClient.invalidateQueries({ queryKey: ["providers"] })
     void queryClient.invalidateQueries({ queryKey: ["agents"] })
     if (state.activeSessionID) void queryClient.invalidateQueries({ queryKey: ["messages"] })
@@ -774,6 +791,7 @@ export function App() {
     state.sessionStatus,
   ])
   const activeSessionStatus = state.activeSessionID ? state.sessionStatus[state.activeSessionID] : undefined
+  const questionRequest = sessionQuestionRequest(state.sessions, state.question, state.activeSessionID ?? undefined)
   const serverConnected = health.data?.healthy === true
   const serverState = health.isError ? "error" : serverConnected ? "connected" : "connecting"
   const title = activeSession ? sessionTitle(activeSession) : activeProject ? "New chat" : "Welcome"
@@ -796,6 +814,24 @@ export function App() {
     })
   }, [isPhoneOverlayLayout])
   const manageServers = useCallback(() => setServerManagerOpen(true), [])
+  const replyQuestion = useCallback(async (request: QuestionRequest, answers: QuestionAnswer[]) => {
+    setQuestionSubmittingID(request.id)
+    try {
+      await sdk.question.reply({ requestID: request.id, answers })
+      dispatch({ type: "question.remove", sessionID: request.sessionID, requestID: request.id })
+    } finally {
+      setQuestionSubmittingID((current) => (current === request.id ? undefined : current))
+    }
+  }, [sdk])
+  const rejectQuestion = useCallback(async (request: QuestionRequest) => {
+    setQuestionSubmittingID(request.id)
+    try {
+      await sdk.question.reject({ requestID: request.id })
+      dispatch({ type: "question.remove", sessionID: request.sessionID, requestID: request.id })
+    } finally {
+      setQuestionSubmittingID((current) => (current === request.id ? undefined : current))
+    }
+  }, [sdk])
 
   useEffect(() => {
     if (!shouldAutoHideSidebars) return
@@ -924,6 +960,10 @@ export function App() {
                         onChange={handleComposerDraftChange}
                         onSubmit={submit}
                         onStop={stop}
+                        questionRequest={questionRequest}
+                        questionSubmitting={questionSubmittingID === questionRequest?.id}
+                        onQuestionReply={replyQuestion}
+                        onQuestionReject={rejectQuestion}
                       />
                     </>
                   )}

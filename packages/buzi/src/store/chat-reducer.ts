@@ -1,5 +1,5 @@
 import type { ChatAction, ChatState } from "../types/chat"
-import type { Message, Part, Session } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, QuestionRequest, Session } from "@opencode-ai/sdk/v2/client"
 import { optimisticPartIDPrefix } from "../lib/ids"
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
@@ -25,6 +25,15 @@ function removeKey<T>(items: Record<string, T>, key: string) {
 
 function removeKeys<T>(items: Record<string, T>, keys: Set<string>) {
   return Object.fromEntries(Object.entries(items).filter(([id]) => !keys.has(id)))
+}
+
+function groupQuestions(items: QuestionRequest[]) {
+  return items.reduce<Record<string, QuestionRequest[]>>((acc, item) => {
+    const list = acc[item.sessionID]
+    if (list) list.push(item)
+    if (!list) acc[item.sessionID] = [item]
+    return acc
+  }, {})
 }
 
 function updatePart(parts: Part[] | undefined, partID: string, field: string, delta: string) {
@@ -89,6 +98,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         parts: removeKeys(state.parts, messageIDs),
         temporaryTitles: removeKeys(state.temporaryTitles, sessionIDs),
         sessionStatus: removeKeys(state.sessionStatus, sessionIDs),
+        question: removeKeys(state.question, sessionIDs),
         activeSessionID: state.activeSessionID && sessionIDs.has(state.activeSessionID) ? undefined : state.activeSessionID,
       }
     }
@@ -118,6 +128,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         sessionStatus: Object.fromEntries(
           Object.entries(state.sessionStatus).filter(([sessionID]) => sessionID !== action.sessionID),
         ),
+        question: removeKey(state.question, action.sessionID),
         activeSessionID: state.activeSessionID === action.sessionID ? undefined : state.activeSessionID,
       }
     case "session.remove":
@@ -128,6 +139,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         sessionStatus: Object.fromEntries(
           Object.entries(state.sessionStatus).filter(([sessionID]) => sessionID !== action.sessionID),
         ),
+        question: removeKey(state.question, action.sessionID),
         activeSessionID: state.activeSessionID === action.sessionID ? undefined : state.activeSessionID,
       }
     case "session.status":
@@ -197,5 +209,33 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           [action.messageID]: updatePart(state.parts[action.messageID], action.partID, action.field, action.delta),
         },
       }
+    case "question.loaded": {
+      const grouped = groupQuestions(action.items)
+      const next = Object.fromEntries(
+        Object.entries(grouped).map(([sessionID, items]) => [sessionID, items.sort((a, b) => cmp(a.id, b.id))]),
+      )
+      const syncedSessionIDs = new Set(
+        state.sessions.filter((session) => session.directory === action.directory).map((session) => session.id),
+      )
+      return {
+        ...state,
+        question: {
+          ...Object.fromEntries(Object.entries(state.question).filter(([sessionID]) => !syncedSessionIDs.has(sessionID))),
+          ...next,
+        },
+      }
+    }
+    case "question.upsert": {
+      const existing = state.question[action.request.sessionID] ?? []
+      const next = upsertByID(existing, action.request).sort((a, b) => cmp(a.id, b.id))
+      return { ...state, question: { ...state.question, [action.request.sessionID]: next } }
+    }
+    case "question.remove": {
+      const existing = state.question[action.sessionID]
+      if (!existing) return state
+      const next = existing.filter((item) => item.id !== action.requestID)
+      if (next.length === 0) return { ...state, question: removeKey(state.question, action.sessionID) }
+      return { ...state, question: { ...state.question, [action.sessionID]: next } }
+    }
   }
 }

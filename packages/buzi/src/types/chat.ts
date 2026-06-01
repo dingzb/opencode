@@ -1,4 +1,4 @@
-import type { Message, Part, Session, SessionStatus } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, QuestionRequest, Session, SessionStatus } from "@opencode-ai/sdk/v2/client"
 
 export type MessagePageItem = {
   info: Message
@@ -11,6 +11,7 @@ export type ChatState = {
   temporaryTitles: Record<string, string>
   messages: Record<string, Message[]>
   parts: Record<string, Part[]>
+  question: Record<string, QuestionRequest[] | undefined>
   activeSessionID?: string | null
 }
 
@@ -30,3 +31,6 @@ export type ChatAction =
   | { type: "part.upsert"; part: Part }
   | { type: "part.remove"; messageID: string; partID: string }
   | { type: "part.delta"; messageID: string; partID: string; field: string; delta: string }
+  | { type: "question.loaded"; directory: string; items: QuestionRequest[] }
+  | { type: "question.upsert"; request: QuestionRequest }
+  | { type: "question.remove"; sessionID: string; requestID: string }

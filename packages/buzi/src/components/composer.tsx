@@ -1,9 +1,10 @@
 import { ArrowUp, Bot, Brain, Check, ChevronDown, ChevronRight, MoreHorizontal, Plus, Search, Square, Zap } from "lucide-react"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
-import type { Agent, Model } from "@opencode-ai/sdk/v2/client"
+import type { Agent, Model, QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import { Button } from "./ui/button"
 import { cn } from "../lib/utils"
+import { QuestionDock } from "./question-dock"
 
 type ModelOption = {
   value: string
@@ -32,6 +33,10 @@ type ComposerProps = {
   onChange: (value: string) => void
   onSubmit: (text: string) => Promise<void>
   onStop: () => Promise<void>
+  questionRequest?: QuestionRequest
+  questionSubmitting?: boolean
+  onQuestionReply?: (request: QuestionRequest, answers: QuestionAnswer[]) => Promise<void>
+  onQuestionReject?: (request: QuestionRequest) => Promise<void>
 }
 
 type DropdownOption = {
@@ -297,6 +302,15 @@ export function Composer(props: ComposerProps) {
   const composerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const textareaLineHeightPx = 14 * 1.7
+  const questionDock =
+    props.questionRequest && props.onQuestionReply && props.onQuestionReject
+      ? {
+          request: props.questionRequest,
+          onReply: props.onQuestionReply,
+          onReject: props.onQuestionReject,
+        }
+      : undefined
+  const questionOpen = !!questionDock
 
   useEffect(() => {
     const textarea = textareaRef.current
@@ -312,6 +326,7 @@ export function Composer(props: ComposerProps) {
   }, [props.value])
 
   useLayoutEffect(() => {
+    if (questionOpen) return
     const composer = composerRef.current
     if (!composer) return
 
@@ -323,7 +338,7 @@ export function Composer(props: ComposerProps) {
     const observer = new ResizeObserver(updateCompactControls)
     observer.observe(composer)
     return () => observer.disconnect()
-  }, [])
+  }, [questionOpen])
 
   const modelGroups = useMemo(() => {
     const groups = new Map<string, DropdownOption[]>()
@@ -356,6 +371,17 @@ export function Composer(props: ComposerProps) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 px-[calc(0.875rem+(var(--chat-scrollbar-width)-2px)/2)] pb-5 pt-10">
+      {questionDock ? (
+        <div className="pointer-events-auto mx-auto w-full max-w-[800px]">
+          <QuestionDock
+            key={questionDock.request.id}
+            request={questionDock.request}
+            submitting={props.questionSubmitting}
+            onReply={questionDock.onReply}
+            onReject={questionDock.onReject}
+          />
+        </div>
+      ) : (
       <div ref={composerRef} className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-white p-3 shadow-lg shadow-zinc-950/10">
         <textarea
           ref={textareaRef}
@@ -501,6 +527,7 @@ export function Composer(props: ComposerProps) {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }
