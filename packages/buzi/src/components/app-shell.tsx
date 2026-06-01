@@ -1,4 +1,11 @@
-import { useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react"
 import {
   Blocks,
   BookOpen,
@@ -31,6 +38,8 @@ const sidebarPanels: Array<{ id: SidebarPanel; label: string; icon: typeof Messa
 const windowDragThreshold = 4
 const sidebarMinWidth = 240
 const sidebarMaxWidth = 420
+const titleBarTitleGap = 8
+const titleBarMaxTitleWidth = 520
 
 export function TitleBar(props: {
   projectPath: string
@@ -47,6 +56,54 @@ export function TitleBar(props: {
   onToggleInspector: () => void
 }) {
   const suppressNextTitleBarClick = useRef(false)
+  const titleBarRef = useRef<HTMLElement>(null)
+  const titleLeadingRef = useRef<HTMLDivElement>(null)
+  const titleTrailingRef = useRef<HTMLDivElement>(null)
+  const titleContentRef = useRef<HTMLDivElement>(null)
+  const [titleLayout, setTitleLayout] = useState({ left: 0, width: 0, ready: false })
+
+  useLayoutEffect(() => {
+    if (props.nativeTitleBar) return
+
+    const updateTitleLayout = () => {
+      const titleBar = titleBarRef.current
+      const leading = titleLeadingRef.current
+      const trailing = titleTrailingRef.current
+      const titleContent = titleContentRef.current
+      if (!titleBar || !leading || !trailing || !titleContent) return
+
+      const titleBarRect = titleBar.getBoundingClientRect()
+      const leadingRect = leading.getBoundingClientRect()
+      const trailingRect = trailing.getBoundingClientRect()
+      const titleNaturalWidth = Math.min(measureTitleNaturalWidth(titleContent), titleBarMaxTitleWidth)
+      const safeLeft = leadingRect.right - titleBarRect.left + titleBarTitleGap
+      const safeRight = trailingRect.left - titleBarRect.left - titleBarTitleGap
+      const width = Math.max(0, Math.min(titleNaturalWidth, safeRight - safeLeft))
+      const left = Math.min(Math.max((titleBarRect.width - width) / 2, safeLeft), safeRight - width)
+
+      setTitleLayout((current) => {
+        const next = { left: Math.round(left), width: Math.round(width), ready: true }
+        if (current.left === next.left && current.width === next.width && current.ready === next.ready) return current
+        return next
+      })
+    }
+
+    updateTitleLayout()
+    const titleBar = titleBarRef.current
+    const leading = titleLeadingRef.current
+    const trailing = titleTrailingRef.current
+    const titleContent = titleContentRef.current
+    if (!titleBar || !leading || !trailing || !titleContent) return
+
+    const observer = new ResizeObserver(updateTitleLayout)
+    observer.observe(titleBar)
+    observer.observe(leading)
+    observer.observe(trailing)
+    observer.observe(titleContent)
+    void document.fonts?.ready.then(updateTitleLayout)
+
+    return () => observer.disconnect()
+  }, [props.nativeTitleBar, props.projectPath, props.title])
 
   const handleTitleBarMouseDown = (event: ReactMouseEvent<HTMLElement>) => {
     if (!props.dragRegion || event.button !== 0) return
@@ -96,8 +153,9 @@ export function TitleBar(props: {
 
   return (
     <header
+      ref={titleBarRef}
       className={cn(
-        "grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center border-b border-zinc-200/80 bg-[#f7f7f5] px-2 sm:px-3 lg:grid-cols-[1fr_auto_1fr]",
+        "relative flex shrink-0 items-center justify-between border-b border-zinc-200/80 bg-[#f7f7f5] px-3",
         props.nativeTitleBar ? "h-10" : "h-12",
         props.className,
       )}
@@ -106,7 +164,7 @@ export function TitleBar(props: {
       onDoubleClick={handleTitleBarDoubleClick}
       {...(props.dragRegion ? { "data-tauri-drag-region": true } : {})}
     >
-      <div className="flex min-w-0 items-center gap-1">
+      <div ref={titleLeadingRef} className="z-10 flex min-w-0 items-center gap-1">
         {props.frameLeading}
         <button
           className="flex size-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
@@ -116,19 +174,29 @@ export function TitleBar(props: {
           {props.sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
         </button>
       </div>
-      <div className="flex min-w-0 justify-center">
-        {!props.nativeTitleBar ? (
-          <div className="min-w-0 max-w-[160px] cursor-default px-2 py-1 text-center min-[420px]:max-w-[220px] sm:max-w-[360px] sm:px-3 lg:max-w-[520px]">
-            <div className="truncate text-[11px] font-semibold leading-4 text-zinc-950 min-[420px]:text-[12px] sm:text-[13px]">
+      {!props.nativeTitleBar ? (
+        <div
+          className="pointer-events-none absolute inset-y-0 flex items-center justify-center overflow-hidden"
+          style={{
+            left: titleLayout.left,
+            opacity: titleLayout.ready ? 1 : 0,
+            width: titleLayout.width,
+          }}
+        >
+          <div ref={titleContentRef} className="min-w-0 cursor-default px-3 py-1 text-center">
+            <div
+              className="truncate text-[13px] font-semibold leading-4 text-zinc-950"
+              data-title-line
+            >
               {props.projectPath || "No project selected"}
             </div>
-            <div className="truncate text-[10px] font-medium leading-4 text-zinc-500 sm:text-[11px]">
+            <div className="truncate text-[11px] font-medium leading-4 text-zinc-500" data-title-line>
               {props.title}
             </div>
           </div>
-        ) : null}
-      </div>
-      <div className="flex min-w-0 justify-end">
+        </div>
+      ) : null}
+      <div ref={titleTrailingRef} className="z-10 flex min-w-0 justify-end">
         <div className="flex shrink-0 items-center gap-1">
           <button
             className="relative flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
@@ -152,7 +220,7 @@ export function TitleBar(props: {
             {props.inspectorOpen ? <PanelRightClose className="size-4" /> : <PanelRight className="size-4" />}
           </button>
           <button
-            className="hidden size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950 sm:flex"
+            className="flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
             title="Application menu"
           >
             <Menu className="size-4" />
@@ -161,6 +229,18 @@ export function TitleBar(props: {
         </div>
       </div>
     </header>
+  )
+}
+
+function measureTitleNaturalWidth(element: HTMLElement) {
+  const style = getComputedStyle(element)
+  return (
+    Math.max(
+      0,
+      ...Array.from(element.querySelectorAll("[data-title-line]")).map((line) => line.scrollWidth),
+    ) +
+    Number.parseFloat(style.paddingLeft) +
+    Number.parseFloat(style.paddingRight)
   )
 }
 

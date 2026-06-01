@@ -119,7 +119,7 @@ function DropdownControl(props: {
       <button
         type="button"
         className={cn(
-          "composer-control flex h-8 min-w-0 max-w-32 items-center gap-1.5 rounded-lg px-2 font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-50 sm:max-w-56",
+          "composer-control flex h-8 min-w-0 max-w-56 items-center gap-1.5 rounded-lg px-2 font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-50",
           open && "bg-zinc-100 text-zinc-800",
         )}
         disabled={props.disabled}
@@ -289,8 +289,8 @@ export function Composer(props: ComposerProps) {
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-10 sm:px-[calc(1.75rem+var(--chat-scrollbar-width)-2px)] sm:pb-5">
-      <div className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[20px] border border-zinc-200/80 bg-[#fbfbfa] p-2.5 shadow-lg shadow-zinc-950/10 sm:rounded-[24px] sm:p-3">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 px-[calc(0.875rem+(var(--chat-scrollbar-width)-2px)/2)] pb-5 pt-10">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-[800px] flex-col gap-2 rounded-[24px] border border-zinc-200/80 bg-[#fbfbfa] p-3 shadow-lg shadow-zinc-950/10">
         <textarea
           ref={textareaRef}
           className="composer-textarea resize-none overflow-hidden bg-transparent px-2 py-0.5 text-zinc-900 outline-none placeholder:text-zinc-400"
@@ -306,7 +306,7 @@ export function Composer(props: ComposerProps) {
             void submit()
           }}
         />
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 sm:flex-nowrap sm:gap-3">
+        <div className="flex min-w-0 flex-nowrap items-center justify-between gap-3">
           <Button
             type="button"
             className="size-8 shrink-0 rounded-full bg-transparent px-0 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:text-zinc-300"
