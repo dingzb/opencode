@@ -40,6 +40,7 @@ const sidebarMinWidth = 240
 const sidebarMaxWidth = 420
 const titleBarTitleGap = 8
 const titleBarMaxTitleWidth = 520
+const titleBarDragClickSuppressMs = 250
 
 export function TitleBar(props: {
   projectPath: string
@@ -56,6 +57,7 @@ export function TitleBar(props: {
   onToggleInspector: () => void
 }) {
   const suppressNextTitleBarClick = useRef(false)
+  const suppressNextTitleBarClickTimeout = useRef<number | undefined>(undefined)
   const titleBarRef = useRef<HTMLElement>(null)
   const titleLeadingRef = useRef<HTMLDivElement>(null)
   const titleTrailingRef = useRef<HTMLDivElement>(null)
@@ -105,13 +107,25 @@ export function TitleBar(props: {
     return () => observer.disconnect()
   }, [props.nativeTitleBar, props.projectPath, props.title])
 
+  useLayoutEffect(() => () => window.clearTimeout(suppressNextTitleBarClickTimeout.current), [])
+
+  const suppressNextNonControlClick = () => {
+    suppressNextTitleBarClick.current = true
+    window.clearTimeout(suppressNextTitleBarClickTimeout.current)
+    suppressNextTitleBarClickTimeout.current = window.setTimeout(() => {
+      suppressNextTitleBarClick.current = false
+    }, titleBarDragClickSuppressMs)
+  }
+
   const handleTitleBarMouseDown = (event: ReactMouseEvent<HTMLElement>) => {
     if (!props.dragRegion || event.button !== 0) return
     if (event.detail > 1) return
 
     const target = event.target
     if (!(target instanceof HTMLElement)) return
-    if (target.closest("button,[role='button'],input,textarea,select,[data-no-window-drag]")) return
+    if (isTitleBarControl(target)) return
+
+    event.preventDefault()
 
     const startX = event.clientX
     const startY = event.clientY
@@ -127,7 +141,7 @@ export function TitleBar(props: {
       const deltaY = moveEvent.clientY - startY
       if (Math.hypot(deltaX, deltaY) < windowDragThreshold) return
 
-      suppressNextTitleBarClick.current = true
+      suppressNextNonControlClick()
       cleanup()
       moveEvent.preventDefault()
       void startWindowDrag()
@@ -139,15 +153,21 @@ export function TitleBar(props: {
 
   const handleTitleBarClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
     if (!suppressNextTitleBarClick.current) return
-    suppressNextTitleBarClick.current = false
     const target = event.target
-    if (target instanceof HTMLElement && target.closest("button,[role='button'],input,textarea,select,a")) return
+    if (target instanceof HTMLElement && isTitleBarControl(target)) return
+
+    suppressNextTitleBarClick.current = false
+    window.clearTimeout(suppressNextTitleBarClickTimeout.current)
     event.preventDefault()
     event.stopPropagation()
   }
 
-  const handleTitleBarDoubleClick = () => {
+  const handleTitleBarDoubleClick = (event: ReactMouseEvent<HTMLElement>) => {
     if (!props.dragRegion) return
+    const target = event.target
+    if (target instanceof HTMLElement && isTitleBarControl(target)) return
+
+    event.preventDefault()
     void toggleMaximizeWindow()
   }
 
@@ -162,7 +182,6 @@ export function TitleBar(props: {
       onMouseDown={handleTitleBarMouseDown}
       onClickCapture={handleTitleBarClickCapture}
       onDoubleClick={handleTitleBarDoubleClick}
-      {...(props.dragRegion ? { "data-tauri-drag-region": true } : {})}
     >
       <div ref={titleLeadingRef} className="z-10 flex min-w-0 items-center gap-1">
         {props.frameLeading}
@@ -230,6 +249,10 @@ export function TitleBar(props: {
       </div>
     </header>
   )
+}
+
+function isTitleBarControl(target: HTMLElement) {
+  return Boolean(target.closest("button,[role='button'],input,textarea,select,a,[data-no-window-drag]"))
 }
 
 function measureTitleNaturalWidth(element: HTMLElement) {
