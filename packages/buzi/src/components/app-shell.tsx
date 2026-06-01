@@ -28,7 +28,7 @@ import {
 import { cn } from "../lib/utils"
 import { startWindowDrag, toggleMaximizeWindow } from "../runtime/window-actions"
 
-export type SidebarPanel = "conversations" | "projects" | "plugins" | "knowledge" | "settings" | "help"
+export type SidebarPanel = "chats" | "projects" | "plugins" | "knowledge" | "settings" | "help"
 export type ServerConfig = {
   id: string
   name: string
@@ -483,13 +483,13 @@ export function LeftSidebar(props: {
   width: number
   onPanelChange: (panel: SidebarPanel) => void
   onResize: (width: number) => void
-  conversations: ReactNode
+  chats: ReactNode
 }) {
   const feature = sidebarPanels.find((panel) => panel.id === props.activePanel)
   const renderContent = () => (
     <>
       <div className="min-h-0 flex-1 flex flex-col">
-        {props.activePanel === "conversations" ? props.conversations : <FeaturePanel panel={feature} onBack={() => props.onPanelChange("conversations")} />}
+        {props.activePanel === "chats" ? props.chats : <FeaturePanel panel={feature} onBack={() => props.onPanelChange("chats")} />}
       </div>
       <SidebarDock activePanel={props.activePanel} onPanelChange={props.onPanelChange} />
     </>
@@ -602,12 +602,12 @@ function SidebarDock(props: { activePanel: SidebarPanel; onPanelChange: (panel: 
         <button
           className={cn(
             "flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-white/70 hover:text-zinc-950",
-            props.activePanel === "conversations" && "bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200",
+            props.activePanel === "chats" && "bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200",
           )}
           title="Chats"
-          onClick={() => props.onPanelChange("conversations")}
+          onClick={() => props.onPanelChange("chats")}
         >
-          <Folders className="size-4" />
+          <MessageCircle className="size-4" />
         </button>
       {sidebarPanels.map((panel) => {
         const Icon = panel.icon

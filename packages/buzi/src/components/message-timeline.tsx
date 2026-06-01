@@ -254,7 +254,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
   }, [])
 
   if (props.loading) {
-    return <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">Loading conversations...</div>
+    return <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">Loading chats...</div>
   }
 
   if (rows.length === 0) {

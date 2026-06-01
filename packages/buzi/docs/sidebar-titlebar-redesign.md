@@ -13,7 +13,7 @@ AppShell
     └── RightInspector
 ```
 
-The goal is to keep conversations as the primary workflow without making the product feel like a chat-only application.
+The goal is to keep chats as the primary workflow without making the product feel like a chat-only application.
 
 ## Decisions
 
@@ -24,7 +24,7 @@ The goal is to keep conversations as the primary workflow without making the pro
 It is responsible for:
 
 - Current context title supplied by the active workspace feature.
-- Current project path and current conversation title in the conversations feature.
+- Current project path and current chat title in the chats feature.
 - Global shell actions such as server configuration status, inspector toggle, and application menu.
 - Desktop window controls in the desktop shell.
 
@@ -38,12 +38,12 @@ Future navigation should not reintroduce a separate VSCode-like vertical strip u
 
 ### 3. LeftSidebar Owns Local Workspace Navigation
 
-The left sidebar is the place for workspace-local navigation and conversation access.
+The left sidebar is the place for workspace-local navigation and chat access.
 
 Default mode:
 
 ```text
-Conversations
+Chats
 ├── Search
 ├── New Session
 └── Session List grouped by time
@@ -55,27 +55,27 @@ Bottom dock:
 Projects  Plugins  Knowledge  Settings  Help  More
 ```
 
-The bottom dock is intentionally compact and icon-only. It should not compete with the conversation list.
+The bottom dock is intentionally compact and icon-only. It should not compete with the chat list.
 
-Project creation and workspace switching are title-bar title-menu responsibilities. The conversations panel should not expose a project creation flow or organize sessions around project management concepts.
+Project creation and workspace switching are title-bar title-menu responsibilities. The chats panel should not expose a project creation flow or organize sessions around project management concepts.
 
-For the conversations feature, the title bar title is centered and uses two lines:
+For the chats feature, the title bar title is centered and uses two lines:
 
 ```text
 project path
-conversation title
+chat title
 ```
 
-The project path line is primary. The conversation title is smaller and lighter, acting as a subtitle. Clicking the centered title opens the project selector menu with the current project, show-all, and add-project actions.
+The project path line is primary. The chat title is smaller and lighter, acting as a subtitle. Clicking the centered title opens the project selector menu with the current project, show-all, and add-project actions.
 
-### 4. Conversations Are a Sidebar Region
+### 4. Chats Are a Sidebar Region
 
-Conversations are no longer treated as a top-level page. They are the default functional region inside the left sidebar.
+Chats are no longer treated as a top-level page. They are the default functional region inside the left sidebar.
 
 This means a session list can be replaced by another sidebar panel when needed, for example:
 
 ```ts
-type SidebarPanel = "conversations" | "projects" | "plugins" | "knowledge" | "settings" | "help"
+type SidebarPanel = "chats" | "projects" | "plugins" | "knowledge" | "settings" | "help"
 ```
 
 Switching panels changes the content of the left sidebar. It should not switch the whole application into a new page.
@@ -99,8 +99,8 @@ The first pass should:
 - Add a top-level `TitleBar`.
 - Remove `ActivityBar`.
 - Replace `SidePanel` with `LeftSidebar`.
-- Keep conversations as the default sidebar panel.
-- Keep new-session actions in the conversations sidebar.
+- Keep chats as the default sidebar panel.
+- Keep new-session actions in the chats sidebar.
 - Move project selection and project creation into the centered title menu.
 - Keep the title bar right side for server status, inspector toggle, and application menu.
 - Add a compact bottom dock for future workspace features.

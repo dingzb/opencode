@@ -6,7 +6,7 @@ import { makeID, optimisticPartIDPrefix } from "./lib/ids"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
 import { LeftSidebar, RightInspector, ServerManagerDialog, type ServerConfig, type SidebarPanel, TitleBar } from "./components/app-shell"
-import { ProjectsPanel } from "./components/projects"
+import { ChatsPanel } from "./components/chats"
 import { DialogSelectProjectDirectory } from "./components/dialog-select-project-directory"
 import { MessageTimeline } from "./components/message-timeline"
 import { Composer } from "./components/composer"
@@ -258,7 +258,7 @@ export function App() {
   const [servers, setServers] = useState<ServerConfig[]>(initialServers)
   const [activeServerID, setActiveServerID] = useState(() => readActiveServerID(initialServers))
   const [serverManagerOpen, setServerManagerOpen] = useState(false)
-  const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("conversations")
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>("chats")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(sidebarDefaultWidth)
@@ -828,8 +828,8 @@ export function App() {
                   width={sidebarWidth}
                   onPanelChange={setActiveSidebarPanel}
                   onResize={setSidebarWidth}
-                  conversations={
-                    <ProjectsPanel
+                  chats={
+                    <ChatsPanel
                       projects={projects}
                       sessions={state.sessions}
                       directory={activeDirectory}

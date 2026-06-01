@@ -108,7 +108,7 @@
 
 ```text
 Workspace
-├── Conversations
+├── Chats
 ├── Agent Runtime
 ├── Project
 ├── Plugin
@@ -798,7 +798,7 @@ AppShell
 建议抽象：
 
 ```text
-Conversation
+Chat
 Workspace
 AgentRuntime
 ToolExecution
