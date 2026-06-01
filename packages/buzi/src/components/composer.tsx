@@ -28,6 +28,8 @@ type ComposerProps = {
   selectedAgent: string
   onAgentChange: (value: string) => void
   agentLoading: boolean
+  value: string
+  onChange: (value: string) => void
   onSubmit: (text: string) => Promise<void>
   onStop: () => Promise<void>
 }
@@ -291,7 +293,6 @@ function ComposerMoreMenu(props: { children: (close: () => void) => ReactNode; d
 }
 
 export function Composer(props: ComposerProps) {
-  const [text, setText] = useState("")
   const [compactControls, setCompactControls] = useState(false)
   const composerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -308,7 +309,7 @@ export function Composer(props: ComposerProps) {
     const nextHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight)
     textarea.style.height = `${nextHeight}px`
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"
-  }, [text])
+  }, [props.value])
 
   useLayoutEffect(() => {
     const composer = composerRef.current
@@ -348,9 +349,8 @@ export function Composer(props: ComposerProps) {
       await props.onStop()
       return
     }
-    const value = text.trim()
+    const value = props.value.trim()
     if (!value) return
-    setText("")
     await props.onSubmit(value)
   }
 
@@ -360,10 +360,10 @@ export function Composer(props: ComposerProps) {
         <textarea
           ref={textareaRef}
           className="composer-textarea resize-none overflow-hidden bg-transparent px-2 py-0.5 text-zinc-900 outline-none placeholder:text-zinc-400"
-          value={text}
+          value={props.value}
           disabled={props.disabled}
           placeholder="Tell me what you want to build..."
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => props.onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.shiftKey) return
             event.preventDefault()
@@ -488,7 +488,7 @@ export function Composer(props: ComposerProps) {
             <Button
               type="button"
               className="size-8 shrink-0 rounded-full bg-zinc-900 px-0 text-white shadow-sm shadow-zinc-950/10 hover:bg-zinc-700 disabled:bg-zinc-300 disabled:text-zinc-500 disabled:shadow-none"
-              disabled={props.disabled || props.stopping || (!props.working && !text.trim())}
+              disabled={props.disabled || props.stopping || (!props.working && !props.value.trim())}
               onClick={submit}
               title={props.working ? "Stop response" : "Send message"}
             >

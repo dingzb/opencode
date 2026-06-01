@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Agent, Model, Project, Session } from "@opencode-ai/sdk/v2/client"
 import { createOpencodeSdk } from "./lib/opencode"
@@ -21,6 +21,7 @@ const serversStorageKey = "buzi:servers:v1"
 const activeServerStorageKey = "buzi:active-server:v1"
 const selectedModelStoragePrefix = "buzi:model-selection:"
 const selectedVariantStoragePrefix = "buzi:model-variant:"
+const composerDraftStoragePrefix = "buzi:composer-draft:"
 const selectedVariantDefaultValue = "__default__"
 const projectsStorageKey = "buzi:projects:v1"
 const activeRouteStorageKey = "buzi:active-route:v1"
@@ -207,6 +208,11 @@ function selectedVariantStorageKey(directory: string, sessionID?: string) {
   return `${selectedVariantStoragePrefix}${directory}:${sessionID ?? "draft"}`
 }
 
+function composerDraftStorageKey(serverUrl: string, directory: string | undefined, sessionID?: string) {
+  if (!directory) return undefined
+  return `${composerDraftStoragePrefix}${serverUrl}:${directory}:${sessionID ?? "draft"}`
+}
+
 function readSelectedModel(directory: string | undefined, sessionID?: string) {
   if (!directory) return undefined
   return window.localStorage.getItem(selectedModelStorageKey(directory, sessionID)) || undefined
@@ -233,6 +239,19 @@ function writeSelectedVariant(directory: string | undefined, value: string | nul
     return
   }
   window.localStorage.setItem(key, value ?? selectedVariantDefaultValue)
+}
+
+function readComposerDraft(key: string | undefined) {
+  return key ? window.localStorage.getItem(key) ?? "" : ""
+}
+
+function writeComposerDraft(key: string | undefined, value: string) {
+  if (!key) return
+  if (!value) {
+    window.localStorage.removeItem(key)
+    return
+  }
+  window.localStorage.setItem(key, value)
 }
 
 function useMediaQuery(query: string) {
@@ -269,6 +288,8 @@ export function App() {
   const [selectedVariant, setSelectedVariant] = useState<string | null | undefined>()
   const [restoredModelSessions, setRestoredModelSessions] = useState<Set<string>>(() => new Set())
   const [selectedAgent, setSelectedAgent] = useState("")
+  const [composerDraft, setComposerDraft] = useState("")
+  const composerDraftKeyRef = useRef<string | undefined>(undefined)
   const [stoppingSessionID, setStoppingSessionID] = useState<string>()
   const [projects, setProjects] = useState<BuziProject[]>(readProjects)
   const [activeProjectID, setActiveProjectID] = useState(initialRoute.projectID)
@@ -295,6 +316,10 @@ export function App() {
   const globalSdk = useMemo(() => createOpencodeSdk({ serverUrl }), [serverUrl])
   const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory: activeDirectory }), [activeDirectory, serverUrl])
   const enabled = Boolean(activeDirectory)
+  const composerDraftKey = useMemo(
+    () => composerDraftStorageKey(serverUrl, activeDirectory, state.activeSessionID ?? undefined),
+    [activeDirectory, serverUrl, state.activeSessionID],
+  )
 
   const health = useQuery({
     queryKey: ["health", serverUrl],
@@ -435,6 +460,19 @@ export function App() {
   useEffect(() => {
     writeActiveRoute({ projectID: activeProjectID, sessionID: state.activeSessionID })
   }, [activeProjectID, state.activeSessionID])
+
+  useEffect(() => {
+    composerDraftKeyRef.current = composerDraftKey
+    setComposerDraft(readComposerDraft(composerDraftKey))
+  }, [composerDraftKey])
+
+  const handleComposerDraftChange = useCallback(
+    (value: string) => {
+      setComposerDraft(value)
+      writeComposerDraft(composerDraftKey, value)
+    },
+    [composerDraftKey],
+  )
 
   useEffect(() => {
     if (projects.length === 0) {
@@ -645,9 +683,12 @@ export function App() {
   const submit = useCallback(
     async (text: string) => {
       if (!enabled) return
+      const draftKey = composerDraftKey
       const newSession = state.activeSessionID ? undefined : await sdk.session.create()
       const sessionID = state.activeSessionID ?? newSession?.data?.id
       if (!sessionID) return
+      writeComposerDraft(draftKey, "")
+      if (draftKey === composerDraftKeyRef.current) setComposerDraft("")
       if (newSession?.data) dispatch({ type: "session.upsert", session: newSession.data })
       if (newSession?.data) dispatch({ type: "session.temporaryTitle", sessionID, title: temporaryTitle(text) })
       const project = projectForSession(projects, newSession?.data ?? activeSession)
@@ -695,6 +736,7 @@ export function App() {
     },
     [
       activeDirectory,
+      composerDraftKey,
       enabled,
       sdk,
       selectedAgent,
@@ -878,6 +920,8 @@ export function App() {
                         selectedAgent={selectedAgent}
                         onAgentChange={setSelectedAgent}
                         agentLoading={agents.isLoading}
+                        value={composerDraft}
+                        onChange={handleComposerDraftChange}
                         onSubmit={submit}
                         onStop={stop}
                       />
