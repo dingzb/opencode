@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { Message, Part, Provider, AssistantMessage, UserMessage } from "@opencode-ai/sdk/v2/client"
-import { Bot, Copy, Check } from "lucide-react"
+import { Copy, Check } from "lucide-react"
 import { Virtualizer, type VirtualizerHandle } from "virtua"
 import { cn } from "../lib/utils"
 import { AssistantPartList } from "./message-parts/assistant-part-list"
@@ -260,13 +260,7 @@ export function MessageTimeline(props: { messages: Message[]; parts: Record<stri
   if (rows.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8 pb-36 text-center">
-        <div className="mb-3 rounded-full border border-zinc-200 bg-white p-3 shadow-sm">
-          <Bot className="size-5 text-zinc-500" />
-        </div>
-        <h2 className="text-lg font-semibold text-zinc-950">Start a focused coding session</h2>
-        <p className="mt-1 max-w-md text-sm text-zinc-500">
-          Pick a session or send a message. Responses stream from the local opencode server.
-        </p>
+        <p className="text-lg font-semibold text-zinc-950">Let's build something remarkable.</p>
       </div>
     )
   }

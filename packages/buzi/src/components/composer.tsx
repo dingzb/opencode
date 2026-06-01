@@ -362,7 +362,7 @@ export function Composer(props: ComposerProps) {
           className="composer-textarea resize-none overflow-hidden bg-transparent px-2 py-0.5 text-zinc-900 outline-none placeholder:text-zinc-400"
           value={text}
           disabled={props.disabled}
-          placeholder="Ask opencode..."
+          placeholder="Tell me what you want to build..."
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.shiftKey) return
