@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Agent, Model, Project, QuestionAnswer, QuestionRequest, Session } from "@opencode-ai/sdk/v2/client"
 import { createOpencodeSdk } from "./lib/opencode"
 import { makeID, optimisticPartIDPrefix } from "./lib/ids"
+import { getRuntimePlatform } from "./runtime/platform"
 import { chatReducer } from "./store/chat-reducer"
 import { useOpencodeEvents } from "./hooks/use-opencode-events"
 import { sessionQuestionRequest } from "./lib/session-request-tree"
@@ -307,6 +308,51 @@ export function App() {
     activeSessionID: initialRoute.sessionID,
   })
 
+  useEffect(() => {
+    const tauriAvailable = typeof window !== "undefined" && window.__TAURI_INTERNALS__ != null
+    if (!tauriAvailable) return
+    let unlisten: (() => void) | undefined
+
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      invoke<{ url: string; username: string; password: string } | null>("get_sidecar_server")
+        .then((info) => {
+          if (info) addSidecarServer(info)
+        })
+        .catch((err) => {
+          console.error("[buzi] invoke get_sidecar_server failed:", err)
+        })
+    })
+
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen<{ url: string; username: string; password: string }>("buzi:sidecar-ready", (event) => {
+        addSidecarServer(event.payload)
+      }).then((fn) => {
+        unlisten = fn
+      })
+    })
+
+    function addSidecarServer(info: { url: string; username: string; password: string }) {
+      console.log("[buzi] adding sidecar server:", info.url)
+      const server: ServerConfig = {
+        id: info.url,
+        name: "Built-in Server",
+        url: info.url,
+        username: info.username,
+        password: info.password,
+      }
+      setServers((prev) => {
+        if (prev.some((s) => s.id === server.id)) return prev
+        console.log("[buzi] server added to list")
+        return [server, ...prev]
+      })
+      setActiveServerID(info.url)
+    }
+
+    return () => {
+      unlisten?.()
+    }
+  }, [])
+
   const activeProject = activeProjectID
     ? projects.find((project) => project.id === activeProjectID)
     : undefined
@@ -316,8 +362,12 @@ export function App() {
   const activeDirectory = activeSession?.directory ?? activeProject?.worktree
   const activeServer = servers.find((server) => server.id === activeServerID) ?? servers[0] ?? defaultServer
   const serverUrl = activeServer.url
-  const globalSdk = useMemo(() => createOpencodeSdk({ serverUrl }), [serverUrl])
-  const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory: activeDirectory }), [activeDirectory, serverUrl])
+  const serverAuth = useMemo(
+    () => ({ username: activeServer.username, password: activeServer.password }),
+    [activeServer.username, activeServer.password],
+  )
+  const globalSdk = useMemo(() => createOpencodeSdk({ serverUrl, ...serverAuth }), [serverUrl, serverAuth])
+  const sdk = useMemo(() => createOpencodeSdk({ serverUrl, directory: activeDirectory, ...serverAuth }), [activeDirectory, serverUrl, serverAuth])
   const enabled = Boolean(activeDirectory)
   const composerDraftKey = useMemo(
     () => composerDraftStorageKey(serverUrl, activeDirectory, state.activeSessionID ?? undefined),
@@ -341,7 +391,7 @@ export function App() {
       const next = (
         await Promise.all(
           projects.map(async (project) => {
-            const result = await createOpencodeSdk({ serverUrl, directory: project.worktree }).session.list({ limit: 80 })
+            const result = await createOpencodeSdk({ serverUrl, directory: project.worktree, ...serverAuth }).session.list({ limit: 80 })
             return result.data ?? []
           }),
         )
@@ -655,14 +705,14 @@ export function App() {
 
   const archiveSession = useCallback(async (session: Session) => {
     dispatch({ type: "session.archive", sessionID: session.id })
-    await createOpencodeSdk({ serverUrl, directory: session.directory }).session
+    await createOpencodeSdk({ serverUrl, directory: session.directory, ...serverAuth }).session
       .update({ sessionID: session.id, time: { archived: Date.now() } })
       .catch((error) => {
         dispatch({ type: "session.upsert", session, source: "local" })
         throw error
       })
     void queryClient.invalidateQueries({ queryKey: ["sessions"] })
-  }, [queryClient, serverUrl])
+  }, [queryClient, serverUrl, serverAuth])
 
   const closeProject = useCallback((project: BuziProject) => {
     setProjects((current) => current.filter((item) => item.id !== project.id && item.worktree !== project.worktree))
@@ -683,7 +733,7 @@ export function App() {
 
   const addProject = useCallback(
     async (nextDirectory: string) => {
-      const result = await createOpencodeSdk({ serverUrl, directory: nextDirectory }).project.current()
+      const result = await createOpencodeSdk({ serverUrl, directory: nextDirectory, ...serverAuth }).project.current()
       const project = result.data
       if (!project) return
       const nextProject = projectRecord(project)
@@ -694,7 +744,7 @@ export function App() {
       void queryClient.invalidateQueries({ queryKey: ["sessions"] })
       void queryClient.invalidateQueries({ queryKey: ["recent-projects"] })
     },
-    [queryClient, serverUrl],
+    [queryClient, serverUrl, serverAuth],
   )
 
   const submit = useCallback(

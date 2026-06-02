@@ -33,6 +33,8 @@ export type ServerConfig = {
   id: string
   name: string
   url: string
+  username?: string
+  password?: string
 }
 
 const sidebarPanels: Array<{ id: SidebarPanel; label: string; icon: typeof MessageCircle }> = [

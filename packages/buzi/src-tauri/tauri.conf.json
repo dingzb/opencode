@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "identifier": "ai.opencode.buzi",
   "build": {
-    "beforeDevCommand": "bun run dev",
-    "beforeBuildCommand": "bun run build",
+    "beforeDevCommand": "bun run build-sidecar && bun run dev",
+    "beforeBuildCommand": "bun run build-sidecar && bun run build",
     "devUrl": "http://localhost:4455",
     "frontendDist": "../dist"
   },
@@ -33,12 +33,20 @@
     "active": true,
     "targets": "all",
     "category": "DeveloperTool",
+    "externalBin": [
+      "binaries/opencode"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

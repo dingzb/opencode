@@ -8,6 +8,7 @@
     "dev": "vite --host 0.0.0.0 --port 4455",
     "dev:linux": "VITE_BUZI_NATIVE_HEADERBAR=1 vite --host 0.0.0.0 --port 4455",
     "build": "tsc -b && vite build",
+    "build-sidecar": "bun run scripts/build-opencode-sidecar.ts",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:build:linux": "tauri build --bundles deb,rpm,appimage",
