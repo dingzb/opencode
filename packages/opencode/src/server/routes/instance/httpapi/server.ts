@@ -2,7 +2,6 @@ import { Config as EffectConfig, Context, Effect, Layer } from "effect"
 import { HttpApiBuilder, OpenApi } from "effect/unstable/httpapi"
 import {
   FetchHttpClient,
-  HttpClient,
   HttpMiddleware,
   HttpRouter,
   HttpServer,
@@ -166,10 +165,9 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
 const uiRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const fs = yield* AppFileSystem.Service
-    const client = yield* HttpClient.HttpClient
     const flags = yield* RuntimeFlags.Service
     yield* router.add("*", "/*", (request) =>
-      serveUIEffect(request, { fs, client, disableEmbeddedWebUi: flags.disableEmbeddedWebUi }),
+      serveUIEffect(request, { fs, disableEmbeddedWebUi: flags.disableEmbeddedWebUi }),
     )
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))

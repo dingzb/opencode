@@ -23,10 +23,8 @@ import { GithubCommand } from "./cli/cmd/github"
 import { ExportCommand } from "./cli/cmd/export"
 import { ImportCommand } from "./cli/cmd/import"
 import { AttachCommand } from "./cli/cmd/tui/attach"
-import { TuiThreadCommand } from "./cli/cmd/tui/thread"
 import { AcpCommand } from "./cli/cmd/acp"
 import { EOL } from "os"
-import { WebCommand } from "./cli/cmd/web"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
 import { DbCommand } from "./cli/cmd/db"
@@ -58,18 +56,12 @@ process.on("uncaughtException", (e) => {
 const args = hideBin(process.argv)
 
 function show(out: string) {
-  const text = out.trimStart()
-  if (!text.startsWith("opencode ")) {
-    process.stderr.write(UI.logo() + EOL + EOL)
-    process.stderr.write(text)
-    return
-  }
   process.stderr.write(out)
 }
 
 const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
-  .scriptName("opencode")
+  .scriptName("buzii-core")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
@@ -157,7 +149,6 @@ const cli = yargs(args)
   .completion("completion", "generate shell completion script")
   .command(AcpCommand)
   .command(McpCommand)
-  .command(TuiThreadCommand)
   .command(AttachCommand)
   .command(RunCommand)
   .command(GenerateCommand)
@@ -168,7 +159,6 @@ const cli = yargs(args)
   .command(UpgradeCommand)
   .command(UninstallCommand)
   .command(ServeCommand)
-  .command(WebCommand)
   .command(ModelsCommand)
   .command(StatsCommand)
   .command(ExportCommand)
@@ -178,6 +168,7 @@ const cli = yargs(args)
   .command(SessionCommand)
   .command(PluginCommand)
   .command(DbCommand)
+  .demandCommand(1, "buzii-core requires an explicit command. Use `buzii-core serve` to start the HTTP server.")
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||
